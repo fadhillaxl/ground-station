@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  ground-station:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ground-station
+    restart: unless-stopped
+    ports:
+      - "7000:7000"
+    
+    # Privileged is required to access USB SDR hardware directly
+    privileged: true
+    
+    volumes:
+      # Map persistent database, recordings, and configuration directories
+      - ./backend/data:/app/backend/data
+      # Map host USB devices to the container for SDR hardware detection
+      - /dev/bus/usb:/dev/bus/usb
+    
+    environment:
+      - GS_ENVIRONMENT=production
+      # Configure GNU Radio to use tmpfile-based circular buffers to avoid shared memory limit issues
+      - GR_BUFFER_TYPE=vmcirc_mmap_tmpfile
+      - PYTHONPATH=/app
+      - STATIC_FILES_DIR=/app/frontend/dist
+      - UHD_IMAGES_DIR=/app/backend/data/uhd_images
+      - UHD_CONFIG_DIR=/app/backend/data/uhd_config
