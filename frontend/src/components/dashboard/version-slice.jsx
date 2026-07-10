@@ -1,10 +1,11 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import { resolveUrl } from '../../utils/url.js';
 
 export const fetchVersionInfo = createAsyncThunk(
     'version/fetchVersionInfo',
     async (_, { rejectWithValue }) => {
         try {
-            const response = await fetch('/api/version');
+            const response = await fetch(resolveUrl('/api/version'));
             if (!response.ok) {
                 throw new Error('Failed to fetch version info');
             }

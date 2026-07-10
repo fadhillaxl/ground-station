@@ -17,6 +17,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import { useTranslation } from 'react-i18next';
 import { useUserTimeSettings } from '../../../hooks/useUserTimeSettings.jsx';
 import { formatDateTime } from '../../../utils/date-time.js';
+import { resolveUrl } from '../../../utils/url.js';
 
 const CLOCK_POLL_INTERVAL_MS = 10000;
 const WARN_DRIFT_MS = 250;
@@ -46,7 +47,7 @@ const TimeDriftCard = () => {
 
         const requestStartMs = Date.now();
         try {
-            const response = await fetch('/api/version', { cache: 'no-store' });
+            const response = await fetch(resolveUrl('/api/version'), { cache: 'no-store' });
             const requestEndMs = Date.now();
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);

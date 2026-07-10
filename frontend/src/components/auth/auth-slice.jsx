@@ -18,8 +18,9 @@
  */
 
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
+import { resolveUrl } from '../../utils/url.js';
 
-const AUTH_API_BASE = '/api/auth';
+const AUTH_API_BASE = resolveUrl('/api/auth');
 const SETUP_MODE_NONE = 'none';
 const SETUP_MODE_FULL = 'full_setup';
 const SETUP_MODE_ADMIN_RECOVERY = 'admin_recovery';

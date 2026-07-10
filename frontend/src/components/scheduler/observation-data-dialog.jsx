@@ -69,6 +69,7 @@ import RecordingDialog from '../filebrowser/recording-dialog.jsx';
 import AudioDialog from '../filebrowser/audio-dialog.jsx';
 import TranscriptionDialog from '../filebrowser/transcription-dialog.jsx';
 import TelemetryViewerDialog from '../filebrowser/telemetry-viewer-dialog.jsx';
+import { resolveUrl } from '../../utils/url.js';
 
 const ObservationDataDialog = ({ open, onClose, observation }) => {
     const { socket } = useSocket();
@@ -458,7 +459,7 @@ const ObservationDataDialog = ({ open, onClose, observation }) => {
                                         if (file.type === 'decoded' && file.url && file.url.endsWith('.bin')) {
                                             try {
                                                 const metadataUrl = file.url.replace('.bin', '.json');
-                                                const response = await fetch(metadataUrl);
+                                                const response = await fetch(resolveUrl(metadataUrl));
                                                 const metadata = await response.json();
                                                 setSelectedFile(file);
                                                 setTelemetryMetadata(metadata);
@@ -645,7 +646,7 @@ const ObservationDataDialog = ({ open, onClose, observation }) => {
                         {selectedFile?.url && (selectedFile.url.endsWith('.png') || selectedFile.url.endsWith('.jpg') || selectedFile.url.endsWith('.jpeg')) ? (
                             <Box sx={{ textAlign: 'center' }}>
                                 <img
-                                    src={selectedFile.url}
+                                    src={resolveUrl(selectedFile.url)}
                                     alt={selectedFile.name || selectedFile.filename}
                                     style={{ maxWidth: '100%', height: 'auto' }}
                                 />
@@ -666,7 +667,7 @@ const ObservationDataDialog = ({ open, onClose, observation }) => {
                         }}
                     >
                         <Button
-                            onClick={() => window.open(selectedFile.url, '_blank')}
+                            onClick={() => window.open(resolveUrl(selectedFile.url), '_blank')}
                             variant="contained"
                         >
                             Download

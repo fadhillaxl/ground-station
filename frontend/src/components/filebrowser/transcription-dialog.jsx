@@ -34,6 +34,7 @@ import {
 import DownloadIcon from '@mui/icons-material/Download';
 import { useTranslation } from 'react-i18next';
 import { useSelector } from 'react-redux';
+import { resolveUrl } from '../../utils/url.js';
 
 function formatBytes(bytes) {
     if (bytes === 0) return '0 Bytes';
@@ -74,7 +75,7 @@ export default function TranscriptionDialog({ open, onClose, transcription }) {
             setLoading(true);
             setError(null);
             try {
-                const response = await fetch(transcription.url);
+                const response = await fetch(resolveUrl(transcription.url));
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
@@ -93,7 +94,7 @@ export default function TranscriptionDialog({ open, onClose, transcription }) {
 
     const handleDownload = () => {
         if (transcription?.url) {
-            window.open(transcription.url, '_blank');
+            window.open(resolveUrl(transcription.url), '_blank');
         }
     };
 

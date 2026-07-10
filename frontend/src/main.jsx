@@ -356,7 +356,9 @@ const router = createBrowserRouter([
             },
         ],
     },
-]);
+], {
+    basename: import.meta.env.BASE_URL.replace(/\/$/, "")
+});
 
 const app = (
     <ReduxProvider store={store}>

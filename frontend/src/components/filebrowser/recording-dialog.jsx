@@ -34,6 +34,7 @@ import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
 import ImageIcon from '@mui/icons-material/Image';
 import { useSelector } from 'react-redux';
 import WaterfallViewer from './waterfall-viewer.jsx';
+import { resolveUrl } from '../../utils/url.js';
 
 function formatBytes(bytes) {
     if (!Number.isFinite(bytes) || bytes < 0) return 'Unknown size';
@@ -196,7 +197,7 @@ export default function RecordingDialog({ open, onClose, recording }) {
                     <Box sx={{ mt: 3 }}>
                         {recording.snapshot && (
                             <WaterfallViewer
-                                src={recording.snapshot.url}
+                                src={resolveUrl(recording.snapshot.url)}
                                 alt={recording.name}
                                 centerFrequency={recording?.metadata?.center_frequency}
                                 sampleRate={recording?.metadata?.sample_rate}
@@ -268,7 +269,7 @@ export default function RecordingDialog({ open, onClose, recording }) {
                                                 {file.previewUrl ? (
                                                     <Box
                                                         component="img"
-                                                        src={file.previewUrl}
+                                                        src={resolveUrl(file.previewUrl)}
                                                         alt={`${file.type} preview`}
                                                         sx={{
                                                             width: '100%',
@@ -504,14 +505,14 @@ export default function RecordingDialog({ open, onClose, recording }) {
                 }}
             >
                 <Button
-                    onClick={() => window.open(recording?.download_urls.data, '_blank')}
+                    onClick={() => window.open(resolveUrl(recording?.download_urls.data), '_blank')}
                     startIcon={<DownloadIcon />}
                     variant="outlined"
                 >
                     Download Data
                 </Button>
                 <Button
-                    onClick={() => window.open(recording?.download_urls.meta, '_blank')}
+                    onClick={() => window.open(resolveUrl(recording?.download_urls.meta), '_blank')}
                     startIcon={<DownloadIcon />}
                     variant="outlined"
                 >
@@ -519,7 +520,7 @@ export default function RecordingDialog({ open, onClose, recording }) {
                 </Button>
                 {recording?.snapshot && (
                     <Button
-                        onClick={() => window.open(recording.snapshot.url, '_blank')}
+                        onClick={() => window.open(resolveUrl(recording.snapshot.url), '_blank')}
                         startIcon={<DownloadIcon />}
                         variant="outlined"
                     >

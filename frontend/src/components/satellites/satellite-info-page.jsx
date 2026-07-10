@@ -40,6 +40,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CloseIcon from '@mui/icons-material/Close';
 import { toast } from '../../utils/toast-with-timestamp.jsx';
 import { useTranslation } from 'react-i18next';
+import { resolveUrl } from '../../utils/url.js';
 
 
 // Fix for default markers in react-leaflet
@@ -480,7 +481,7 @@ const SatelliteInfoContent = ({
                     <Box sx={{textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1}}>
                         {!imageError ? (
                             <img
-                                src={`/satimages/full/${satelliteData['norad_id']}.png`}
+                                src={resolveUrl(`/satimages/full/${satelliteData['norad_id']}.png`)}
                                 alt={`Satellite ${satelliteData['norad_id']}`}
                                 onError={handleImageError}
                                 style={{

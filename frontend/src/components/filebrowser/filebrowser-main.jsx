@@ -106,6 +106,7 @@ import {
 } from './filebrowser-slice.jsx';
 import { toast } from 'react-toastify';
 import { useTranslation } from 'react-i18next';
+import { resolveUrl } from '../../utils/url.js';
 import RecordingDialog from './recording-dialog.jsx';
 import TelemetryViewerDialog from './telemetry-viewer-dialog.jsx';
 import AudioDialog from './audio-dialog.jsx';
@@ -592,12 +593,12 @@ export default function FileBrowserMain() {
 
     const handleDownload = (item) => {
         if (item.type === 'recording') {
-            window.open(item.download_urls.data, '_blank');
+            window.open(resolveUrl(item.download_urls.data), '_blank');
             setTimeout(() => {
-                window.open(item.download_urls.meta, '_blank');
+                window.open(resolveUrl(item.download_urls.meta), '_blank');
             }, 100);
         } else {
-            window.open(item.url, '_blank');
+            window.open(resolveUrl(item.url), '_blank');
         }
     };
 
@@ -616,7 +617,7 @@ export default function FileBrowserMain() {
                 metadataUrl = item.url + '.json';
             }
 
-            const response = await fetch(metadataUrl);
+            const response = await fetch(resolveUrl(metadataUrl));
             const metadata = await response.json();
 
             // For SSTV images (.png), show simple preview with metadata
@@ -2100,7 +2101,7 @@ export default function FileBrowserMain() {
                                     }}
                                 >
                                     <ZoomableImage
-                                        src={selectedItem.url}
+                                        src={resolveUrl(selectedItem.url)}
                                         alt={selectedItem.name}
                                         resetKey={`${detailsOpen}-${selectedItem.url}`}
                                         containerSx={{
@@ -2238,7 +2239,7 @@ export default function FileBrowserMain() {
                             <Box>
                                 {/* Image */}
                                 <ZoomableImage
-                                    src={selectedItem.url}
+                                    src={resolveUrl(selectedItem.url)}
                                     alt={selectedItem.displayName || selectedItem.filename}
                                     resetKey={`${detailsOpen}-${selectedItem.url}`}
                                     containerSx={{

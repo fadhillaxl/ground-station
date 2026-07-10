@@ -1,10 +1,11 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import { resolveUrl } from '../../utils/url.js';
 
 export const fetchUpdateCheck = createAsyncThunk(
     'updateCheck/fetchUpdateCheck',
     async (_, { rejectWithValue }) => {
         try {
-            const response = await fetch('/api/update-check');
+            const response = await fetch(resolveUrl('/api/update-check'));
             if (!response.ok) {
                 throw new Error('Failed to fetch update info');
             }

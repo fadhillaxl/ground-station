@@ -35,6 +35,7 @@ import PauseIcon from '@mui/icons-material/Pause';
 import VolumeUpIcon from '@mui/icons-material/VolumeUp';
 import { useTranslation } from 'react-i18next';
 import { useSelector } from 'react-redux';
+import { resolveUrl } from '../../utils/url.js';
 
 function formatBytes(bytes) {
     if (bytes === 0) return '0 Bytes';
@@ -88,7 +89,7 @@ export default function AudioDialog({ open, onClose, audio, metadata }) {
 
         const loadWaveform = async () => {
             try {
-                const response = await fetch(audio.url);
+                const response = await fetch(resolveUrl(audio.url));
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
@@ -349,14 +350,14 @@ export default function AudioDialog({ open, onClose, audio, metadata }) {
 
     const handleDownloadAudio = () => {
         if (audio?.url) {
-            window.open(audio.url, '_blank');
+            window.open(resolveUrl(audio.url), '_blank');
         }
     };
 
     const handleDownloadMetadata = () => {
         if (audio?.url) {
             const metadataUrl = audio.url.replace('.wav', '.json');
-            window.open(metadataUrl, '_blank');
+            window.open(resolveUrl(metadataUrl), '_blank');
         }
     };
 
@@ -443,7 +444,7 @@ export default function AudioDialog({ open, onClose, audio, metadata }) {
                         {/* Hidden audio element */}
                         <audio
                             ref={audioRef}
-                            src={audio.url}
+                            src={resolveUrl(audio.url)}
                             preload="metadata"
                             style={{ display: 'none' }}
                             key={`audio-${audio.url}`}

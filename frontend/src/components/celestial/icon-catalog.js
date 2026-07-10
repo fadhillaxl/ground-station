@@ -1,6 +1,7 @@
-const BODY_BASE_URL = '/body-icons';
-const MISSION_BASE_URL = '/mission-icons';
-const SATELLITE_BASE_URL = '/satimages';
+const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+const BODY_BASE_URL = `${base}/body-icons`;
+const MISSION_BASE_URL = `${base}/mission-icons`;
+const SATELLITE_BASE_URL = `${base}/satimages`;
 
 const BODY_ICON_FILE_BY_ID = Object.freeze({
     sun: 'sun-sphere-icon.png',

@@ -45,6 +45,7 @@ import { toast } from '../../utils/toast-with-timestamp.jsx';
 import { loginUser } from '../auth/auth-slice.jsx';
 import { useSocket } from '../common/socket.jsx';
 import { SettingsActionFooter, SettingsSection } from '../settings/shared/index.js';
+import { resolveUrl } from '../../utils/url.js';
 
 const WIZARD_STEP_RESTORE = 0;
 const WIZARD_STEP_IDENTITY = 1;
@@ -220,7 +221,7 @@ const SetupWizard = ({
 
     const didSetupFinishAfterRestoreDisconnect = React.useCallback(async () => {
         try {
-            const response = await fetch('/api/auth/status');
+            const response = await fetch(resolveUrl('/api/auth/status'));
             if (!response.ok) return false;
             const payload = await response.json();
             return payload?.setup_required === false;

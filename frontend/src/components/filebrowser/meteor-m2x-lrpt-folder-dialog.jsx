@@ -47,6 +47,7 @@ import FolderIcon from '@mui/icons-material/Folder';
 import ZoomableImage from '../common/zoomable-image.jsx';
 import { useUserTimeSettings } from '../../hooks/useUserTimeSettings.jsx';
 import { formatDateTime } from '../../utils/date-time.js';
+import { resolveUrl } from '../../utils/url.js';
 
 function TabPanel({ children, value, index }) {
     return (
@@ -133,7 +134,7 @@ export default function MeteorM2xLrptFolderDialog({ open, onClose, folder }) {
     ].filter(cat => cat.isMetadata || (cat.images && cat.images.length > 0));
 
     const handleDownloadFolder = () => {
-        const downloadUrl = `/api/decoded/${encodeURIComponent(folder.foldername)}/download`;
+        const downloadUrl = resolveUrl(`/api/decoded/${encodeURIComponent(folder.foldername)}/download`);
         window.open(downloadUrl, '_blank');
     };
 
@@ -337,7 +338,7 @@ export default function MeteorM2xLrptFolderDialog({ open, onClose, folder }) {
                                                         <CardMedia
                                                             component="img"
                                                             height="200"
-                                                            image={image.url}
+                                                            image={resolveUrl(image.url)}
                                                             alt={image.filename}
                                                             sx={{ objectFit: 'cover' }}
                                                         />
@@ -476,7 +477,7 @@ export default function MeteorM2xLrptFolderDialog({ open, onClose, folder }) {
                         }}
                     >
                         <ZoomableImage
-                            src={selectedImage.url}
+                            src={resolveUrl(selectedImage.url)}
                             alt={selectedImage.filename}
                             resetKey={`${selectedImage.filename}-${selectedImage.url}`}
                             maxZoom={6}
@@ -509,7 +510,7 @@ export default function MeteorM2xLrptFolderDialog({ open, onClose, folder }) {
                         }}
                     >
                         <Button
-                            onClick={() => window.open(selectedImage.url, '_blank')}
+                            onClick={() => window.open(resolveUrl(selectedImage.url), '_blank')}
                             startIcon={<DownloadIcon />}
                             variant="outlined"
                         >
