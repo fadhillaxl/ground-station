@@ -9,7 +9,11 @@ def test_is_static_asset_request_expected_prefixes():
     assert is_static_asset_request("static/js/app.js")
     assert is_static_asset_request("assets/logo.png")
     assert is_static_asset_request("favicon.ico")
+    assert is_static_asset_request("groundstation/static/js/app.js")
+    assert is_static_asset_request("groundstation/assets/logo.png")
+    assert is_static_asset_request("groundstation/favicon.ico")
     assert not is_static_asset_request("dashboard")
+    assert not is_static_asset_request("groundstation/dashboard")
 
 
 def test_resolve_static_asset_path_rejects_traversal(tmp_path: Path):
@@ -30,3 +34,15 @@ def test_resolve_static_asset_path_allows_valid_path(tmp_path: Path):
     resolved = resolve_static_asset_path(static_root, "static/app.js")
 
     assert resolved == asset_path.resolve()
+
+
+def test_resolve_static_asset_path_allows_valid_path_with_subpath(tmp_path: Path):
+    static_root = (tmp_path / "dist").resolve()
+    asset_path = static_root / "static" / "app.js"
+    asset_path.parent.mkdir(parents=True)
+    asset_path.write_text("console.log('ok')", encoding="utf-8")
+
+    resolved = resolve_static_asset_path(static_root, "groundstation/static/app.js")
+
+    assert resolved == asset_path.resolve()
+
