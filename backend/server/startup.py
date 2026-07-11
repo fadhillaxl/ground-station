@@ -265,6 +265,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def strip_subpath_prefix(request: Request, call_next):
+    path = request.scope.get("path", "")
+    if path.startswith("/groundstation"):
+        new_path = path[len("/groundstation"):]
+        if not new_path.startswith("/"):
+            new_path = "/" + new_path
+        request.scope["path"] = new_path
+        if "raw_path" in request.scope:
+            raw_path = request.scope["raw_path"].decode("ascii", errors="ignore")
+            if raw_path.startswith("/groundstation"):
+                new_raw = raw_path[len("/groundstation"):]
+                if not new_raw.startswith("/"):
+                    new_raw = "/" + new_raw
+                request.scope["raw_path"] = new_raw.encode("ascii")
+    return await call_next(request)
+
+
 process_manager.set_sio(sio)
 
 
