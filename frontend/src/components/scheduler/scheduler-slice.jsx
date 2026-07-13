@@ -261,6 +261,31 @@ export const cancelRunningObservation = createAsyncThunk(
     }
 );
 
+// Start/execute a scheduled observation immediately
+export const startRunningObservation = createAsyncThunk(
+    'scheduler/start',
+    async ({ socket, id }, { rejectWithValue }) => {
+        try {
+            return await new Promise((resolve, reject) => {
+                socket.emit("api.call", {
+                    cmd: 'start-observation',
+                    data: id
+                }, res => {
+                    if (res.success) {
+                        resolve({
+                            id
+                        });
+                    } else {
+                        reject(new Error(res.error || 'Failed to start observation'));
+                    }
+                });
+            });
+        } catch (error) {
+            return rejectWithValue(error.message);
+        }
+    }
+);
+
 // Fetch all monitored satellites
 export const fetchMonitoredSatellites = createAsyncThunk(
     'scheduler/fetchMonitoredSatellites',
@@ -756,6 +781,13 @@ const schedulerSlice = createSlice({
                 const observation = state.observations.find(obs => obs.id === action.payload.id);
                 if (observation) {
                     observation.status = 'cancelled';
+                }
+            })
+            // Start observation
+            .addCase(startRunningObservation.fulfilled, (state, action) => {
+                const observation = state.observations.find(obs => obs.id === action.payload.id);
+                if (observation) {
+                    observation.status = 'running';
                 }
             })
             // Fetch passes

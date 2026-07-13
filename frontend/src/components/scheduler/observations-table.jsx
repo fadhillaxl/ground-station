@@ -48,6 +48,7 @@ import {
     Folder as FolderIcon,
     Visibility as VisibilityIcon,
     Close as CloseIcon,
+    PlayArrow as PlayArrowIcon,
 } from '@mui/icons-material';
 import WeatherViewer from '../WeatherViewer/WeatherViewer.jsx';
 import { alpha } from '@mui/material/styles';
@@ -57,6 +58,7 @@ import {
     deleteScheduledObservations,
     toggleObservationEnabled,
     cancelRunningObservation,
+    startRunningObservation,
     setSelectedObservation,
     setDialogOpen,
     toggleStatusFilter,
@@ -251,6 +253,12 @@ const ObservationsTable = () => {
     const handleCancel = (id) => {
         if (socket) {
             dispatch(cancelRunningObservation({ socket, id }));
+        }
+    };
+
+    const handleStartNow = (id) => {
+        if (socket) {
+            dispatch(startRunningObservation({ socket, id }));
         }
     };
 
@@ -514,6 +522,33 @@ const ObservationsTable = () => {
                 const isRunning = params.row.status === 'running';
                 return (
                     <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                        {!isRunning ? (
+                            <Tooltip title="Run Now">
+                                <IconButton
+                                    size="small"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleStartNow(params.row.id);
+                                    }}
+                                    color="success"
+                                >
+                                    <PlayArrowIcon fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                        ) : (
+                            <Tooltip title="Stop/Cancel">
+                                <IconButton
+                                    size="small"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleCancel(params.row.id);
+                                    }}
+                                    color="warning"
+                                >
+                                    <StopIcon fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                        )}
                         {hasWeatherDecoder && isRunning && (
                             <Tooltip title="Open Live Decoder">
                                 <IconButton
@@ -755,6 +790,34 @@ const ObservationsTable = () => {
                     <Box sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center' }}>
                         <ContentCopyIcon sx={{ mr: 1 }} />
                         {t('scheduler_tables.shared.duplicate')}
+                    </Box>
+                </Button>
+                <Button
+                    variant="contained"
+                    color="success"
+                    onClick={() => {
+                        if (selectedIds.length > 0) {
+                            selectedIds.forEach(id => handleStartNow(id));
+                        }
+                    }}
+                    disabled={
+                        selectedIds.length === 0 ||
+                        !selectedIds.some(id =>
+                            allObservations.find(obs =>
+                                obs.id === id &&
+                                obs.status !== 'running'
+                            )
+                        )
+                    }
+                    sx={{
+                        minWidth: 'auto',
+                        px: { xs: 1, md: 2 }
+                    }}
+                >
+                    <PlayArrowIcon sx={{ display: { xs: 'block', md: 'none' } }} />
+                    <Box sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center' }}>
+                        <PlayArrowIcon sx={{ mr: 1 }} />
+                        Run Now
                     </Box>
                 </Button>
                 <Button

@@ -335,6 +335,45 @@ async def cancel_observation(
     return {"success": True, "data": {"id": observation_id}}
 
 
+async def start_observation(
+    sio: Any, data: Optional[str], logger: Any, sid: str
+) -> Dict[str, Union[bool, Dict, str]]:
+    """
+    Start/execute a scheduled observation immediately.
+
+    Args:
+        sio: Socket.IO server instance
+        data: Observation ID
+        logger: Logger instance
+        sid: Socket.IO session ID
+
+    Returns:
+        Dictionary with success status
+    """
+    if not data:
+        logger.error("No observation ID provided")
+        return {"success": False, "error": "Observation ID required"}
+
+    observation_id = data
+
+    # Execute via executor
+    if obs_events.observation_sync and obs_events.observation_sync.executor:
+        try:
+            start_result = await obs_events.observation_sync.executor.start_observation(
+                observation_id
+            )
+            return {
+                "success": bool(start_result.get("success", False)),
+                "data": start_result.get("data", {}),
+                "error": str(start_result.get("error", "")),
+            }
+        except Exception as e:
+            logger.error(f"Error starting observation: {e}")
+            return {"success": False, "error": str(e)}
+
+    return {"success": False, "error": "Executor not initialized"}
+
+
 # ============================================================================
 # MONITORED SATELLITES
 # ============================================================================
@@ -616,6 +655,7 @@ def register_handlers(registry):
             "delete-scheduled-observations": (delete_scheduled_observations, "api_call"),
             "toggle-observation-enabled": (toggle_observation_enabled, "api_call"),
             "cancel-observation": (cancel_observation, "api_call"),
+            "start-observation": (start_observation, "api_call"),
             # Monitored satellites
             "get-monitored-satellites": (get_monitored_satellites, "api_call"),
             "create-monitored-satellite": (create_monitored_satellite, "api_call"),
