@@ -271,20 +271,38 @@ class StripSubpathMiddleware:
         self.app = app
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] == "http":
+        if scope["type"] in ("http", "websocket"):
             path = scope.get("path", "")
+            # Collapse duplicate slashes to prevent reverse proxies from causing double-slash route mismatches
+            while "//" in path:
+                path = path.replace("//", "/")
+            
             if path.startswith("/groundstation"):
                 new_path = path[len("/groundstation"):]
                 if not new_path.startswith("/"):
                     new_path = "/" + new_path
+                while "//" in new_path:
+                    new_path = new_path.replace("//", "/")
                 scope["path"] = new_path
+                
                 if "raw_path" in scope:
                     raw_path = scope["raw_path"].decode("ascii", errors="ignore")
+                    while "//" in raw_path:
+                        raw_path = raw_path.replace("//", "/")
                     if raw_path.startswith("/groundstation"):
                         new_raw = raw_path[len("/groundstation"):]
                         if not new_raw.startswith("/"):
                             new_raw = "/" + new_raw
+                        while "//" in new_raw:
+                            new_raw = new_raw.replace("//", "/")
                         scope["raw_path"] = new_raw.encode("ascii")
+            else:
+                scope["path"] = path
+                if "raw_path" in scope:
+                    raw_path = scope["raw_path"].decode("ascii", errors="ignore")
+                    while "//" in raw_path:
+                        raw_path = raw_path.replace("//", "/")
+                    scope["raw_path"] = raw_path.encode("ascii")
         await self.app(scope, receive, send)
 
 
