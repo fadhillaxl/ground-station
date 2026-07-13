@@ -99,6 +99,7 @@ import FftAccordion from "./settings-fft.jsx";
 import VfoAccordion from "./vfo-settings/settings-vfo.jsx";
 import RecordingAccordion from "./settings-recording.jsx";
 import PlaybackAccordion from "./settings-playback.jsx";
+import WeatherAccordion from "./settings-weather.jsx";
 import { useTranslation } from 'react-i18next';
 import { selectRunningRigTransmitters } from "../target/transmitter-selectors.js";
 import { fetchFiles } from "../filebrowser/filebrowser-slice.jsx";
@@ -1121,6 +1122,19 @@ const WaterfallSettings = forwardRef(function WaterfallSettings({ playbackRemain
         dispatch(setExpandedPanels(updateExpandedPanels(expandedPanels)));
     }, [dispatch, expandedPanels]);
 
+    const handleWeatherAccordionChange = useCallback((event, isExpanded) => {
+        const panel = 'weather';
+        const updateExpandedPanels = (currentExpandedPanels) => {
+            if (isExpanded) {
+                return currentExpandedPanels.includes(panel)
+                    ? currentExpandedPanels
+                    : [...currentExpandedPanels, panel];
+            }
+            return currentExpandedPanels.filter(p => p !== panel);
+        };
+        dispatch(setExpandedPanels(updateExpandedPanels(expandedPanels)));
+    }, [dispatch, expandedPanels]);
+
     const handleFftAccordionChange = useCallback((event, isExpanded) => {
         const panel = 'fft';
         const updateExpandedPanels = (currentExpandedPanels) => {
@@ -1429,7 +1443,7 @@ const WaterfallSettings = forwardRef(function WaterfallSettings({ playbackRemain
     };
 
     const handleToggleAllAccordions = () => {
-        const allPanels = ['vfo', 'freqControl', 'sdr', 'fft', 'recording', 'playback'];
+        const allPanels = ['vfo', 'freqControl', 'sdr', 'fft', 'recording', 'playback', 'weather'];
         const allExpanded = allPanels.every(panel => expandedPanels.includes(panel));
 
         if (allExpanded) {
@@ -1456,9 +1470,9 @@ const WaterfallSettings = forwardRef(function WaterfallSettings({ playbackRemain
                         size="small"
                         onClick={handleToggleAllAccordions}
                         sx={{ p: 0, minWidth: 0, width: 20, height: 20 }}
-                        title={expandedPanels.length === 6 ? "Collapse All" : "Expand All"}
+                        title={expandedPanels.length === 7 ? "Collapse All" : "Expand All"}
                     >
-                        {expandedPanels.length === 6 ? <UnfoldLess sx={{ fontSize: 16 }} /> : <UnfoldMore sx={{ fontSize: 16 }} />}
+                        {expandedPanels.length === 7 ? <UnfoldLess sx={{ fontSize: 16 }} /> : <UnfoldMore sx={{ fontSize: 16 }} />}
                     </IconButton>
                 </Box>
             </TitleBar>
@@ -1544,6 +1558,13 @@ const WaterfallSettings = forwardRef(function WaterfallSettings({ playbackRemain
                     centerFrequency={centerFrequency}
                     sampleRate={sampleRate}
                     onCenterFrequencyChange={handleVfoCenterFrequencyChange}
+                />
+
+                <WeatherAccordion
+                    expanded={expandedPanels.includes('weather')}
+                    onAccordionChange={handleWeatherAccordionChange}
+                    selectedSDRId={selectedSDRId}
+                    isStreaming={isStreaming}
                 />
 
                 <FftAccordion
