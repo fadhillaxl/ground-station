@@ -110,6 +110,10 @@ const router = createBrowserRouter([
                         Component: ScheduledObservationsLayout,
                     },
                     {
+                        path: "weather",
+                        Component: WeatherViewerRoute,
+                    },
+                    {
                         path: "weather/:decoderId",
                         Component: WeatherViewerRoute,
                     },

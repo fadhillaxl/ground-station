@@ -4,6 +4,9 @@ import { useSocket } from '../common/socket.jsx';
 import SignalInfo from './SignalInfo.jsx';
 import Constellation from './Constellation.jsx';
 import ImageCanvas from './ImageCanvas.jsx';
+import { useSelector } from 'react-redux';
+import { Satellite as SatelliteIcon } from '@mui/icons-material';
+import { getFlattenedTasks } from '../scheduler/session-utils.js';
 
 // Color enhancement filters for canvas overlay
 const COLOR_PALETTES = {
@@ -16,6 +19,20 @@ const COLOR_PALETTES = {
 
 export default function WeatherViewer({ decoderId }) {
   const { socket } = useSocket();
+  const observations = useSelector((state) => state.scheduler?.observations || []);
+
+  // Determine active decoder ID (either passed directly or derived from active running observation)
+  const resolvedDecoderId = React.useMemo(() => {
+    if (decoderId) return decoderId;
+
+    const activeObs = observations.find((obs) => {
+      if (obs.status !== 'running') return false;
+      const tasks = getFlattenedTasks(obs);
+      return tasks.some((t) => t.type === 'weather_decoder');
+    });
+    return activeObs?.id || null;
+  }, [decoderId, observations]);
+
   const [signalData, setSignalData] = useState({
     snr: 0.0,
     peak_snr: 0.0,
@@ -30,17 +47,17 @@ export default function WeatherViewer({ decoderId }) {
   const [selectedPalette, setSelectedPalette] = useState('default');
 
   useEffect(() => {
-    if (!socket) return;
+    if (!socket || !resolvedDecoderId) return;
 
     // Connect socket listeners for weather live events
     const handleSignalUpdate = (packet) => {
-      if (packet && packet.decoder_id === decoderId) {
+      if (packet && packet.decoder_id === resolvedDecoderId) {
         setSignalData(packet.data);
       }
     };
 
     const handleImageUpdate = (packet) => {
-      if (packet && packet.decoder_id === decoderId) {
+      if (packet && packet.decoder_id === resolvedDecoderId) {
         setImageUpdate(packet);
       }
     };
@@ -52,7 +69,23 @@ export default function WeatherViewer({ decoderId }) {
       socket.off('weather_signal', handleSignalUpdate);
       socket.off('weather_image_update', handleImageUpdate);
     };
-  }, [socket, decoderId]);
+  }, [socket, resolvedDecoderId]);
+
+  if (!resolvedDecoderId) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 'calc(100vh - 120px)', minHeight: 600, p: 3, width: '100%' }}>
+        <Paper sx={{ p: 4, maxWidth: 500, textAlign: 'center', background: 'rgba(30, 30, 40, 0.6)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 3, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+          <SatelliteIcon sx={{ fontSize: 60, color: 'primary.main' }} />
+          <Typography variant="h5" fontWeight="bold" sx={{ color: 'text.primary' }}>
+            No Live Weather Decoding Active
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            No live geostationary weather satellite decoding session is currently running. Please schedule or trigger a scheduled observation with a "Weather Decoder" task to watch real-time progressive images here.
+          </Typography>
+        </Paper>
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ flexGrow: 1, p: 2, height: 'calc(100vh - 120px)', minHeight: 600, display: 'flex', flexDirection: 'column' }}>
