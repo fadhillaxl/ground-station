@@ -50,12 +50,6 @@ import SatelliteInfoPage from "./components/satellites/satellite-info-page.jsx";
 import FileBrowserMain from "./components/filebrowser/filebrowser-main.jsx";
 import ScheduledObservationsLayout from "./components/scheduler/main-layout.jsx";
 import CelestialMainLayout from "./components/celestial/main-layout.jsx";
-import WeatherViewer from "./components/WeatherViewer/WeatherViewer.jsx";
-
-function WeatherViewerRoute() {
-    const { decoderId } = useParams();
-    return <WeatherViewer decoderId={decoderId} />;
-}
 
 const enableStrictMode = import.meta.env.VITE_REACT_STRICT_MODE !== 'false';
 
@@ -108,14 +102,6 @@ const router = createBrowserRouter([
                     {
                         path: "scheduler",
                         Component: ScheduledObservationsLayout,
-                    },
-                    {
-                        path: "weather",
-                        Component: WeatherViewerRoute,
-                    },
-                    {
-                        path: "weather/:decoderId",
-                        Component: WeatherViewerRoute,
                     },
                     {
                         path: "preferences",

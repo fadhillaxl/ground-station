@@ -666,30 +666,6 @@ class ObservationExecutor:
                         observation_id, session_id, sdr_id, sdr_config, satellite, task_config
                     )
 
-                elif task_type == "weather_decoder":
-                    pipeline_id = task_config.get("pipeline_id", "gk2a_lrit")
-                    output_dir = task_config.get("output_dir", f"decoded/{observation_id}")
-                    
-                    from weather.manager import start_live_decoder
-                    from weather.satdumpbridge import start_bridge_task
-                    from weather.filewatcher import start_watcher_task
-
-                    freq_override = task_config.get("frequency_hz") or task_config.get("center_frequency")
-                    rate_override = task_config.get("sample_rate")
-
-                    http_port = await start_live_decoder(
-                        decoder_id=observation_id,
-                        pipeline_id=pipeline_id,
-                        sdr_config=sdr_config,
-                        output_dir=output_dir,
-                        frequency_hz=freq_override,
-                        sample_rate=rate_override
-                    )
-
-                    if http_port:
-                        await start_bridge_task(observation_id, http_port, pipeline_id)
-                        await start_watcher_task(observation_id, output_dir)
-
             logger.info(f"Observation {observation_id} session {session_key} started successfully")
 
         except Exception as e:
@@ -790,7 +766,6 @@ class ObservationExecutor:
             has_audio_task = any(task.get("type") == "audio_recording" for task in tasks)
             has_transcription_task = any(task.get("type") == "transcription" for task in tasks)
             has_iq_task = any(task.get("type") == "iq_recording" for task in tasks)
-            has_weather_task = any(task.get("type") == "weather_decoder" for task in tasks)
 
             vfo_manager = VFOManager()
             active_vfos = vfo_manager.get_active_vfos(session_id)
@@ -807,18 +782,6 @@ class ObservationExecutor:
                     self.transcription_handler.stop_transcription_task(
                         sdr_id, session_id, vfo_number
                     )
-
-            if has_weather_task:
-                try:
-                    from weather.manager import stop_live_decoder
-                    from weather.satdumpbridge import stop_bridge_task
-                    from weather.filewatcher import stop_watcher_task
-
-                    await stop_live_decoder(observation_id)
-                    await stop_bridge_task(observation_id)
-                    await stop_watcher_task(observation_id)
-                except Exception as e:
-                    logger.error(f"Error stopping weather live decoder: {e}")
 
             if has_iq_task:
                 skip_auto_waterfall = any(

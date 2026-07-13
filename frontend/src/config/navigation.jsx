@@ -21,7 +21,6 @@ import PublicIcon from '@mui/icons-material/Public';
 import GpsFixedIcon from '@mui/icons-material/GpsFixed';
 import EngineeringIcon from '@mui/icons-material/Engineering';
 import {Satellite03Icon} from "hugeicons-react";
-import SatelliteIcon from '@mui/icons-material/Satellite';
 import MemoryIcon from '@mui/icons-material/Memory';
 import InfoIcon from '@mui/icons-material/Info';
 import GroupWorkIcon from '@mui/icons-material/GroupWork';
@@ -335,11 +334,6 @@ export const getNavigation = ({ isAdmin = false } = {}) => {
             segment: 'waterfall',
             title: i18n.t('waterfall_view', { ns: 'navigation' }),
             icon: <WaterfallIconWithStatus />,
-        },
-        {
-            segment: 'weather',
-            title: i18n.t('weather_decoder', { ns: 'navigation', defaultValue: 'Weather Decoder' }),
-            icon: <SatelliteIcon />,
         },
         {
             segment: 'files',

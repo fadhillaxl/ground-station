@@ -20,9 +20,8 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useTranslation } from 'react-i18next';
-import { Box, Paper, Typography, Chip, Stack, Button, Tooltip, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, IconButton } from '@mui/material';
-import { AccessTime, RadioButtonChecked, Satellite, Router, Visibility, Cancel, Stop, Close as CloseIcon } from '@mui/icons-material';
-import WeatherViewer from '../WeatherViewer/WeatherViewer.jsx';
+import { Box, Paper, Typography, Chip, Stack, Button, Tooltip, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions } from '@mui/material';
+import { AccessTime, RadioButtonChecked, Satellite, Router, Visibility, Cancel, Stop } from '@mui/icons-material';
 import { useSocket } from '../common/socket.jsx';
 import {
     cancelRunningObservation,
@@ -46,7 +45,6 @@ export default function ObservationStatusBanner() {
     const { socket } = useSocket();
     const observations = useSelector((state) => state.scheduler.observations);
     const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
-    const [weatherDecoderOpen, setWeatherDecoderOpen] = useState(false);
     const [selectedObservationForAction, setSelectedObservationForAction] = useState(null);
     const [now, setNow] = useState(() => new Date());
     const { timezone, locale } = useUserTimeSettings();
@@ -277,8 +275,6 @@ export default function ObservationStatusBanner() {
                     (() => {
                         const observation = runningObservations[0];
                         const additionalRunning = Math.max(runningObservations.length - 1, 0);
-                        const tasks = getFlattenedTasks(observation);
-                        const hasWeatherDecoder = tasks.some(t => t.type === 'weather_decoder');
                         const startTime = formatTime(observation.task_start || observation.pass?.event_start);
                         const endTime = formatTime(observation.task_end || observation.pass?.event_end);
                         const sdrs = getSessionSdrs(observation);
@@ -337,20 +333,8 @@ export default function ObservationStatusBanner() {
                                         width: { xs: '100%', sm: 'auto' },
                                         display: 'flex',
                                         justifyContent: { xs: 'flex-end', sm: 'flex-start' },
-                                        gap: 1
                                     }}
                                 >
-                                    {hasWeatherDecoder && (
-                                        <Button
-                                            variant="contained"
-                                            size="small"
-                                            color="primary"
-                                            startIcon={<Visibility />}
-                                            onClick={() => setWeatherDecoderOpen(true)}
-                                        >
-                                            Live Decode
-                                        </Button>
-                                    )}
                                     <Tooltip title={t('scheduler_banner.stop_observation_tooltip')}>
                                         <Button
                                             variant="outlined"
@@ -510,35 +494,6 @@ export default function ObservationStatusBanner() {
                     </Button>
                 </DialogActions>
             </Dialog>
-
-            {/* Live Weather Decoder Dialog */}
-            {hasRunning && (
-                <Dialog
-                    open={weatherDecoderOpen}
-                    onClose={() => setWeatherDecoderOpen(false)}
-                    maxWidth="lg"
-                    fullWidth
-                    PaperProps={{
-                        sx: {
-                            bgcolor: 'background.paper',
-                            borderRadius: 3,
-                            height: '90vh'
-                        }
-                    }}
-                >
-                    <DialogTitle sx={{ m: 0, p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Typography variant="h6" fontWeight="bold">
-                            Live Weather Satellite Decoder: {runningObservations[0]?.satellite?.name || 'Satellite'}
-                        </Typography>
-                        <IconButton onClick={() => setWeatherDecoderOpen(false)}>
-                            <CloseIcon />
-                        </IconButton>
-                    </DialogTitle>
-                    <DialogContent dividers sx={{ p: 0, height: '100%' }}>
-                        <WeatherViewer decoderId={runningObservations[0]?.id} />
-                    </DialogContent>
-                </Dialog>
-            )}
         </Paper>
     );
 }

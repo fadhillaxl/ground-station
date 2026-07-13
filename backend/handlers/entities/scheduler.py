@@ -335,128 +335,6 @@ async def cancel_observation(
     return {"success": True, "data": {"id": observation_id}}
 
 
-async def start_observation(
-    sio: Any, data: Optional[str], logger: Any, sid: str
-) -> Dict[str, Union[bool, Dict, str]]:
-    """
-    Start/execute a scheduled observation immediately.
-
-    Args:
-        sio: Socket.IO server instance
-        data: Observation ID
-        logger: Logger instance
-        sid: Socket.IO session ID
-
-    Returns:
-        Dictionary with success status
-    """
-    if not data:
-        logger.error("No observation ID provided")
-        return {"success": False, "error": "Observation ID required"}
-
-    observation_id = data
-
-    # Execute via executor
-    if obs_events.observation_sync and obs_events.observation_sync.executor:
-        try:
-            start_result = await obs_events.observation_sync.executor.start_observation(
-                observation_id
-            )
-            return {
-                "success": bool(start_result.get("success", False)),
-                "data": start_result.get("data", {}),
-                "error": str(start_result.get("error", "")),
-            }
-        except Exception as e:
-            logger.error(f"Error starting observation: {e}")
-            return {"success": False, "error": str(e)}
-
-    return {"success": False, "error": "Executor not initialized"}
-
-
-async def trigger_instant_weather_decode(
-    sio: Any, data: Optional[Dict], logger: Any, sid: str
-) -> Dict[str, Union[bool, Dict, str]]:
-    """
-    Creates a temporary scheduled observation for weather decoding and starts it immediately.
-    """
-    if not data:
-        logger.error("No data provided")
-        return {"success": False, "error": "No data provided"}
-
-    pipeline_id = data.get("pipeline_id", "gk2a_lrit")
-    sdr_id = data.get("sdr_id")
-    if not sdr_id:
-        logger.error("No SDR ID provided")
-        return {"success": False, "error": "SDR ID required"}
-
-    import uuid
-    obs_id = str(uuid.uuid4())
-
-    async with AsyncSessionLocal() as dbsession:
-        from crud.hardware import fetch_sdr_by_id
-        sdr_res = await fetch_sdr_by_id(dbsession, sdr_id)
-        if not sdr_res["success"] or not sdr_res["data"]:
-            logger.error(f"SDR not found: {sdr_id}")
-            return {"success": False, "error": "SDR not found"}
-        sdr_data = sdr_res["data"]
-
-        observation_payload = {
-            "id": obs_id,
-            "name": f"Live SatDump {pipeline_id.upper()}",
-            "enabled": True,
-            "status": "scheduled",
-            "satellite": {
-                "norad_id": "43874",
-                "name": "GEO-KOMPSAT-2A",
-            },
-            "pass": None,
-            "sessions": [
-                {
-                    "sdr": {
-                        "id": sdr_data["id"],
-                        "name": sdr_data["name"],
-                        "gain": sdr_data.get("gain", 40.2),
-                        "antenna_port": sdr_data.get("antenna_port", "RX"),
-                        "sample_rate": sdr_data.get("sample_rate", 2048000),
-                    },
-                    "tasks": [
-                        {
-                            "type": "weather_decoder",
-                            "config": {
-                                "pipeline_id": pipeline_id,
-                                "output_dir": f"decoded/{pipeline_id}_{obs_id[:8]}",
-                            }
-                        }
-                    ]
-                }
-            ],
-            "rotator": None,
-            "rig": None
-        }
-
-        from crud.scheduledobservations import add_scheduled_observation
-        db_res = await add_scheduled_observation(dbsession, observation_payload)
-        if not db_res["success"]:
-            logger.error(f"Failed to add temporary observation: {db_res.get('error')}")
-            return {"success": False, "error": db_res.get("error", "Failed to save observation")}
-
-    if obs_events.observation_sync and obs_events.observation_sync.executor:
-        try:
-            start_result = await obs_events.observation_sync.executor.start_observation(obs_id)
-            if start_result.get("success"):
-                await emit_scheduled_observations_changed()
-                return {"success": True, "observation_id": obs_id}
-            else:
-                logger.error(f"Failed to execute temporary observation: {start_result.get('error')}")
-                return {"success": False, "error": start_result.get("error", "Failed to start execution")}
-        except Exception as e:
-            logger.error(f"Error starting execution: {e}")
-            return {"success": False, "error": f"Failed to start execution: {e}"}
-
-    return {"success": False, "error": "Executor not initialized"}
-
-
 # ============================================================================
 # MONITORED SATELLITES
 # ============================================================================
@@ -738,8 +616,6 @@ def register_handlers(registry):
             "delete-scheduled-observations": (delete_scheduled_observations, "api_call"),
             "toggle-observation-enabled": (toggle_observation_enabled, "api_call"),
             "cancel-observation": (cancel_observation, "api_call"),
-            "start-observation": (start_observation, "api_call"),
-            "trigger-instant-weather-decode": (trigger_instant_weather_decode, "api_call"),
             # Monitored satellites
             "get-monitored-satellites": (get_monitored_satellites, "api_call"),
             "create-monitored-satellite": (create_monitored_satellite, "api_call"),

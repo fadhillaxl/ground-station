@@ -29,7 +29,6 @@ from observations import events as obs_events
 from observations.events import emit_scheduled_observations_changed as _emit
 from observations.events import set_socketio_instance
 from observations.executor import ObservationExecutor
-from weather.websocket import set_socketio_instance as set_weather_socketio_instance
 from observations.sync import ObservationSchedulerSync
 from pipeline.orchestration.processmanager import process_manager
 from server import runtimestate, shutdown
@@ -94,7 +93,6 @@ async def lifespan(fastapiapp: FastAPI):
 
     # Set socketio instance for observations events
     set_socketio_instance(sio)
-    set_weather_socketio_instance(sio)
 
     # Initialize background task manager
     background_task_manager = BackgroundTaskManager(sio)

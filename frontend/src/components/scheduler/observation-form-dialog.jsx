@@ -743,16 +743,6 @@ const ObservationFormDialog = () => {
                     },
                 };
                 break;
-            case 'weather_decoder':
-                newTask = {
-                    type: 'weather_decoder',
-                    config: {
-                        pipeline_id: 'gk2a_lrit',
-                        output_dir: 'decoded/gk2a_lrit',
-                        frequency_hz: '',
-                    },
-                };
-                break;
             default:
                 return;
         }
@@ -873,10 +863,6 @@ const ObservationFormDialog = () => {
             }
             const parts = [transmitterName, freqMHz, ...extraInfo, t('scheduler_dialogs.shared.iq_format_sigmf')].filter(Boolean);
             return parts.join(' • ');
-        } else if (task.type === 'weather_decoder') {
-            const pipelineId = task.config.pipeline_id || 'gk2a_lrit';
-            const outputDir = task.config.output_dir || 'decoded/gk2a_lrit';
-            return `Pipeline: ${pipelineId.toUpperCase()} • Output: ${outputDir}`;
         }
         return '';
     };
@@ -1071,15 +1057,12 @@ const ObservationFormDialog = () => {
     });
 
     const isFormValid = () => {
-        // Check if CURRENT formData.pass is valid (exists in future passes, matches original pass, or is null)
-        const hasValidPass = !formData.pass || 
-            (selectedObservation?.pass && 
-             Math.abs(new Date(selectedObservation.pass.event_start).getTime() - new Date(formData.pass.event_start).getTime()) < 1000) ||
-            passes.some(p => {
-                const passStartTime = new Date(p.event_start).getTime();
-                const currentStartTime = new Date(formData.pass.event_start).getTime();
-                return Math.abs(passStartTime - currentStartTime) < 1000;
-            });
+        // Check if CURRENT formData.pass is valid (exists in future passes or is null)
+        const hasValidPass = !formData.pass || passes.some(p => {
+            const passStartTime = new Date(p.event_start).getTime();
+            const currentStartTime = new Date(formData.pass.event_start).getTime();
+            return Math.abs(passStartTime - currentStartTime) < 1000;
+        });
 
         // Check if selected pass conflicts with existing observations
         const conflictingObs = formData.pass && observations.find(obs => {
@@ -1860,15 +1843,6 @@ const ObservationFormDialog = () => {
                                 >
                                     {t('scheduler_dialogs.shared.task_iq_recording')}
                                 </Button>
-                                <Button
-                                    size="small"
-                                    variant="outlined"
-                                    startIcon={<AddIcon />}
-                                    onClick={() => handleAddTask('weather_decoder')}
-                                    disabled={isFormDisabled}
-                                >
-                                    Weather Decoder
-                                </Button>
                             </Stack>
                         </Box>
 
@@ -1930,7 +1904,6 @@ const ObservationFormDialog = () => {
                                                         task.type === 'decoder' ? 'Decoder' :
                                                         task.type === 'audio_recording' ? 'Audio Recording' :
                                                         task.type === 'transcription' ? 'Transcription' :
-                                                        task.type === 'weather_decoder' ? 'Weather Decoder' :
                                                         'IQ Recording'
                                                     }
                                                     size="small"
@@ -1938,7 +1911,6 @@ const ObservationFormDialog = () => {
                                                         task.type === 'decoder' ? 'primary' :
                                                         task.type === 'audio_recording' ? 'secondary' :
                                                         task.type === 'transcription' ? 'info' :
-                                                        task.type === 'weather_decoder' ? 'success' :
                                                         'default'
                                                     }
                                                     variant="filled"
@@ -2663,49 +2635,6 @@ const ObservationFormDialog = () => {
                                                         />
                                                     </Box>
                                                 </>
-                                            )}
-
-                                            {task.type === 'weather_decoder' && (
-                                                <Stack spacing={2} sx={{ mt: 1 }}>
-                                                    <FormControl fullWidth size="small" disabled={isFormDisabled}>
-                                                        <InputLabel>Weather Pipeline ID</InputLabel>
-                                                        <Select
-                                                            value={task.config.pipeline_id || 'gk2a_lrit'}
-                                                            onChange={(e) =>
-                                                                handleTaskConfigChange(index, 'pipeline_id', e.target.value)
-                                                            }
-                                                            label="Weather Pipeline ID"
-                                                        >
-                                                            <MenuItem value="gk2a_lrit">GEO-KOMPSAT-2A LRIT (BPSK)</MenuItem>
-                                                            <MenuItem value="gk2a_hrit">GEO-KOMPSAT-2A HRIT (QPSK)</MenuItem>
-                                                        </Select>
-                                                    </FormControl>
-
-                                                    <TextField
-                                                        fullWidth
-                                                        size="small"
-                                                        label="Output Directory"
-                                                        value={task.config.output_dir || ''}
-                                                        onChange={(e) =>
-                                                            handleTaskConfigChange(index, 'output_dir', e.target.value)
-                                                        }
-                                                        disabled={isFormDisabled}
-                                                        helperText="Folder name inside data/decoded/ where images will be saved"
-                                                    />
-
-                                                    <TextField
-                                                        fullWidth
-                                                        size="small"
-                                                        label="Frequency Override (Hz)"
-                                                        type="number"
-                                                        value={task.config.frequency_hz || ''}
-                                                        onChange={(e) =>
-                                                            handleTaskConfigChange(index, 'frequency_hz', parseFloat(e.target.value) || '')
-                                                        }
-                                                        disabled={isFormDisabled}
-                                                        helperText="Optional. Leave empty to use pipeline default"
-                                                    />
-                                                </Stack>
                                             )}
                                             </Stack>
                                         )}
