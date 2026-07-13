@@ -1071,12 +1071,15 @@ const ObservationFormDialog = () => {
     });
 
     const isFormValid = () => {
-        // Check if CURRENT formData.pass is valid (exists in future passes or is null)
-        const hasValidPass = !formData.pass || passes.some(p => {
-            const passStartTime = new Date(p.event_start).getTime();
-            const currentStartTime = new Date(formData.pass.event_start).getTime();
-            return Math.abs(passStartTime - currentStartTime) < 1000;
-        });
+        // Check if CURRENT formData.pass is valid (exists in future passes, matches original pass, or is null)
+        const hasValidPass = !formData.pass || 
+            (selectedObservation?.pass && 
+             Math.abs(new Date(selectedObservation.pass.event_start).getTime() - new Date(formData.pass.event_start).getTime()) < 1000) ||
+            passes.some(p => {
+                const passStartTime = new Date(p.event_start).getTime();
+                const currentStartTime = new Date(formData.pass.event_start).getTime();
+                return Math.abs(passStartTime - currentStartTime) < 1000;
+            });
 
         // Check if selected pass conflicts with existing observations
         const conflictingObs = formData.pass && observations.find(obs => {
