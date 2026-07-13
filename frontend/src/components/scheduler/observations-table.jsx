@@ -46,7 +46,10 @@ import {
     Cancel as DisableIcon,
     Settings as SettingsIcon,
     Folder as FolderIcon,
+    Visibility as VisibilityIcon,
+    Close as CloseIcon,
 } from '@mui/icons-material';
+import WeatherViewer from '../WeatherViewer/WeatherViewer.jsx';
 import { alpha } from '@mui/material/styles';
 import { useSocket } from '../common/socket.jsx';
 import {
@@ -130,6 +133,7 @@ const ObservationsTable = () => {
     const openDataDialog = useSelector((state) => state.scheduler?.openObservationDataDialog || false);
     const selectedObservationForData = useSelector((state) => state.scheduler?.selectedObservationForData || null);
     const rotators = useSelector((state) => state.rotators?.rotators || []);
+    const [liveDecoderObsId, setLiveDecoderObsId] = useState(null);
     const { timezone, locale } = useUserTimeSettings();
     const rowSelectionModel = useMemo(() => toRowSelectionModel(selectedIds), [selectedIds]);
     const rotatorNameById = useMemo(() => {
@@ -504,32 +508,51 @@ const ObservationsTable = () => {
             headerAlign: 'right',
             sortable: false,
             filterable: false,
-            renderCell: (params) => (
-                <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                    <Tooltip title={t('edit')}>
-                        <IconButton
-                            size="small"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                handleEdit(params.row);
-                            }}
-                        >
-                            <EditIcon fontSize="small" />
-                        </IconButton>
-                    </Tooltip>
-                    <Tooltip title={t('scheduler_tables.observations.view_downloaded_data')}>
-                        <IconButton
-                            size="small"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                handleViewData(params.row);
-                            }}
-                        >
-                            <FolderIcon fontSize="small" />
-                        </IconButton>
-                    </Tooltip>
-                </Stack>
-            ),
+            renderCell: (params) => {
+                const tasks = getFlattenedTasks(params.row);
+                const hasWeatherDecoder = tasks.some(t => t.type === 'weather_decoder');
+                const isRunning = params.row.status === 'running';
+                return (
+                    <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                        {hasWeatherDecoder && isRunning && (
+                            <Tooltip title="Open Live Decoder">
+                                <IconButton
+                                    size="small"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setLiveDecoderObsId(params.row.id);
+                                    }}
+                                    color="primary"
+                                >
+                                    <VisibilityIcon fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                        )}
+                        <Tooltip title={t('edit')}>
+                            <IconButton
+                                size="small"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleEdit(params.row);
+                                }}
+                            >
+                                <EditIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                        <Tooltip title={t('scheduler_tables.observations.view_downloaded_data')}>
+                            <IconButton
+                                size="small"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleViewData(params.row);
+                                }}
+                            >
+                                <FolderIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                    </Stack>
+                );
+            },
         },
     ];
 
@@ -1016,6 +1039,35 @@ const ObservationsTable = () => {
                 onClose={handleCloseDataDialog}
                 observation={selectedObservationForData}
             />
+
+            {/* Live Weather Decoder Dialog */}
+            <Dialog
+                open={Boolean(liveDecoderObsId)}
+                onClose={() => setLiveDecoderObsId(null)}
+                maxWidth="lg"
+                fullWidth
+                PaperProps={{
+                    sx: {
+                        bgcolor: 'background.paper',
+                        borderRadius: 3,
+                        height: '90vh'
+                    }
+                }}
+            >
+                <DialogTitle sx={{ m: 0, p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Typography variant="h6" fontWeight="bold">
+                        Live Weather Satellite Decoder View
+                    </Typography>
+                    <IconButton onClick={() => setLiveDecoderObsId(null)}>
+                        <CloseIcon />
+                    </IconButton>
+                </DialogTitle>
+                <DialogContent dividers sx={{ p: 0, height: '100%' }}>
+                    {liveDecoderObsId && (
+                        <WeatherViewer decoderId={liveDecoderObsId} />
+                    )}
+                </DialogContent>
+            </Dialog>
 
         </Paper>
     );
