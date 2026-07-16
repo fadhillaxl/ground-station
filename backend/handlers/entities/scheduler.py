@@ -355,8 +355,8 @@ async def trigger_instant_weather_decode(
     obs_id = str(uuid.uuid4())
 
     async with AsyncSessionLocal() as dbsession:
-        from crud.hardware import fetch_sdr_by_id
-        sdr_res = await fetch_sdr_by_id(dbsession, sdr_id)
+        from crud.hardware import fetch_sdr
+        sdr_res = await fetch_sdr(dbsession, sdr_id)
         if not sdr_res["success"] or not sdr_res["data"]:
             logger.error(f"SDR not found: {sdr_id}")
             return {"success": False, "error": "SDR not found"}
