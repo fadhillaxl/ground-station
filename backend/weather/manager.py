@@ -195,7 +195,7 @@ async def stop_live_decoder(decoder_id: str) -> bool:
     return True
 
 
-async def _log_output(decoder_id: str, stream: asyncio.subprocess.StreamReader, name: str):
+async def _log_output(decoder_id: str, stream: asyncio.StreamReader, name: str):
     """Utility to read output from SatDump stream and print to logs."""
     try:
         while True:
