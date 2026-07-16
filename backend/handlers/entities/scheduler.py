@@ -362,6 +362,11 @@ async def trigger_instant_weather_decode(
             return {"success": False, "error": "SDR not found"}
         sdr_data = sdr_res["data"]
 
+        import datetime
+        now = datetime.datetime.now(datetime.timezone.utc)
+        now_iso = now.isoformat().replace("+00:00", "Z")
+        future_iso = (now + datetime.timedelta(hours=24)).isoformat().replace("+00:00", "Z")
+
         observation_payload = {
             "id": obs_id,
             "name": f"Live SatDump {pipeline_id.upper()}",
@@ -371,7 +376,14 @@ async def trigger_instant_weather_decode(
                 "norad_id": "43874",
                 "name": "GEO-KOMPSAT-2A",
             },
-            "pass": None,
+            "pass": {
+                "event_start": now_iso,
+                "event_end": future_iso,
+                "peak_altitude": 90.0,
+            },
+            "task_start": now_iso,
+            "task_end": future_iso,
+            "task_start_elevation": 10.0,
             "sessions": [
                 {
                     "sdr": {
