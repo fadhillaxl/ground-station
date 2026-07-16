@@ -36,7 +36,7 @@ class RtlSdrTcpClient:
     _TUNER_TYPES = {1: "E4000", 2: "FC0012", 3: "FC0013", 4: "FC2580", 5: "R820T", 6: "R828D"}
 
     DEFAULT_PORT: int = 1234
-    CONNECT_TIMEOUT: float = 5.0  # Seconds
+    CONNECT_TIMEOUT: float = 15.0  # Seconds (increased from 5.0 to tolerate high-latency remote connections)
     READ_TIMEOUT: float = 10.0  # Seconds for sample reads
     READ_CHUNK_SIZE: int = 16384  # Bytes to read per recv call
 
