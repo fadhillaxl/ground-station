@@ -26,8 +26,20 @@ def map_sdr_config_to_args(sdr_config: Dict[str, Any]) -> list[str]:
     """
     Maps Ground Station SDR configuration dictionary to SatDump CLI source options.
     """
-    connection_type = sdr_config.get("connection_type", "usb")
     sdr_type = sdr_config.get("type", "rtlsdrusbv3")
+    if isinstance(sdr_type, str):
+        sdr_type = sdr_type.lower()
+    else:
+        # If it's an Enum object, get its value
+        sdr_type = getattr(sdr_type, "value", "rtlsdrusbv3").lower()
+
+    connection_type = sdr_config.get("connection_type")
+    if not connection_type:
+        if "tcp" in sdr_type:
+            connection_type = "tcp"
+        else:
+            connection_type = "usb"
+
     gain = sdr_config.get("gain", 40.0)
     bias_t = sdr_config.get("bias_t", False)
 

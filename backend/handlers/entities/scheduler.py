@@ -387,8 +387,7 @@ async def trigger_instant_weather_decode(
             "sessions": [
                 {
                     "sdr": {
-                        "id": sdr_data["id"],
-                        "name": sdr_data["name"],
+                        **sdr_data,
                         "gain": sdr_data.get("gain", 40.2),
                         "antenna_port": sdr_data.get("antenna_port", "RX"),
                         "sample_rate": sdr_data.get("sample_rate", 2048000),
