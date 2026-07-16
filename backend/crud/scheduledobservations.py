@@ -44,11 +44,11 @@ def _transform_to_db_format(data: dict) -> dict:
         rig_id = uuid.UUID(rig_id)
 
     # Extract satellite info
-    satellite = data.get("satellite", {})
+    satellite = data.get("satellite") or {}
     norad_id = satellite.get("norad_id")
 
     # Extract pass timing
-    pass_data = data.get("pass", {})
+    pass_data = data.get("pass") or {}
     event_start = pass_data.get("event_start")
     event_end = pass_data.get("event_end")
     task_start = data.get("task_start")
@@ -65,13 +65,13 @@ def _transform_to_db_format(data: dict) -> dict:
         "task_start_elevation": data.get("task_start_elevation", 10),
     }
 
-    rotator_config = dict(data.get("rotator", {}) or {})
+    rotator_config = dict(data.get("rotator") or {})
     rotator_config.pop("tracker_id", None)
 
     hardware_config = {
         "rotator": rotator_config,
-        "rig": data.get("rig", {}),
-        "transmitter": data.get("transmitter", {}),
+        "rig": data.get("rig") or {},
+        "transmitter": data.get("transmitter") or {},
     }
 
     return {
@@ -112,16 +112,16 @@ def _transform_to_db_format(data: dict) -> dict:
 
 def _transform_from_db_format(db_obj: dict) -> dict:
     """Transform database format back to handler format."""
-    hardware_config = db_obj.get("hardware_config", {})
-    satellite_config = db_obj.get("satellite_config", {})
-    pass_config = db_obj.get("pass_config", {})
-    sessions = db_obj.get("sessions", []) or []
+    hardware_config = db_obj.get("hardware_config") or {}
+    satellite_config = db_obj.get("satellite_config") or {}
+    pass_config = db_obj.get("pass_config") or {}
+    sessions = db_obj.get("sessions") or []
 
     # Helper function to convert datetime to ISO format
     def to_iso(dt):
         return dt.isoformat() if dt and hasattr(dt, "isoformat") else dt
 
-    rotator_config = dict(hardware_config.get("rotator", {}) or {})
+    rotator_config = dict(hardware_config.get("rotator") or {})
     rotator_config.pop("tracker_id", None)
 
     return {
@@ -143,8 +143,8 @@ def _transform_from_db_format(db_obj: dict) -> dict:
         "task_end": to_iso(db_obj.get("task_end")),
         "task_start_elevation": pass_config.get("task_start_elevation", 10),
         "rotator": rotator_config,
-        "rig": hardware_config.get("rig", {}),
-        "transmitter": hardware_config.get("transmitter", {}),
+        "rig": hardware_config.get("rig") or {},
+        "transmitter": hardware_config.get("transmitter") or {},
         "sessions": sessions,
         "created_at": to_iso(db_obj.get("created_at")),
         "updated_at": to_iso(db_obj.get("updated_at")),
@@ -155,7 +155,7 @@ def _transform_from_db_format(db_obj: dict) -> dict:
         # Execution metadata fields
         "actual_start_time": to_iso(db_obj.get("actual_start_time")),
         "actual_end_time": to_iso(db_obj.get("actual_end_time")),
-        "execution_log": db_obj.get("execution_log", []),
+        "execution_log": db_obj.get("execution_log") or [],
     }
 
 
