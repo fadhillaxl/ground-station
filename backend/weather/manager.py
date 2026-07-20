@@ -41,7 +41,8 @@ def map_sdr_config_to_args(sdr_config: Dict[str, Any]) -> list[str]:
             connection_type = "usb"
 
     gain = sdr_config.get("gain", 40.0)
-    bias_t = sdr_config.get("bias_t", False)
+    bias_t = sdr_config.get("bias_t", False) or sdr_config.get("bias", False)
+    lna_agc = sdr_config.get("lna_agc", False)
 
     args = []
 
@@ -50,22 +51,24 @@ def map_sdr_config_to_args(sdr_config: Dict[str, Any]) -> list[str]:
         if connection_type == "tcp":
             args.extend([
                 "--source", "rtltcp",
-                "--ip_address", sdr_config.get("host", "127.0.0.1"),
+                "--ip_address", str(sdr_config.get("host", "127.0.0.1")),
                 "--port", str(sdr_config.get("port", 1234)),
             ])
         else:
             args.extend(["--source", "rtlsdr"])
         
         args.extend(["--gain", str(gain)])
+        if lna_agc:
+            args.append("--lna_agc")
         if bias_t:
-            args.extend(["--bias", "true"])
+            args.append("--bias")
 
     elif "airspy" in sdr_type:
         args.extend(["--source", "airspy"])
         # Airspy uses manual or general gain depending on settings
         args.extend(["--general_gain", str(int(gain / 2))])
         if bias_t:
-            args.extend(["--bias", "true"])
+            args.append("--bias")
 
     elif "soapysdr" in sdr_type:
         args.extend(["--source", "soapysdr"])
@@ -143,8 +146,8 @@ async def start_live_decoder(
 
     # Add general parameters
     cmd.extend([
-        "--samplerate", str(int(target_rate)),
-        "--frequency", str(int(target_freq)),
+        "--frequency", f"{target_freq:.6e}" if isinstance(target_freq, float) else str(target_freq),
+        "--samplerate", f"{target_rate:.6e}" if isinstance(target_rate, float) else str(target_rate),
         "--http_server", http_addr,
         "--dc_block"
     ])

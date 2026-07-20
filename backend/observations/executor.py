@@ -647,10 +647,18 @@ class ObservationExecutor:
                     freq_override = task_config.get("frequency_hz") or task_config.get("center_frequency")
                     rate_override = task_config.get("sample_rate")
 
+                    merged_sdr_config = {**sdr_config}
+                    if "lna_agc" in task_config:
+                        merged_sdr_config["lna_agc"] = task_config["lna_agc"]
+                    if "bias" in task_config or "bias_t" in task_config:
+                        merged_sdr_config["bias_t"] = task_config.get("bias") or task_config.get("bias_t")
+                    if "gain" in task_config:
+                        merged_sdr_config["gain"] = task_config["gain"]
+
                     http_port = await start_live_decoder(
                         decoder_id=observation_id,
                         pipeline_id=pipeline_id,
-                        sdr_config=sdr_config,
+                        sdr_config=merged_sdr_config,
                         output_dir=output_dir,
                         frequency_hz=freq_override,
                         sample_rate=rate_override

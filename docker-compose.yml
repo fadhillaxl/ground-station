@@ -14,6 +14,8 @@ services:
     privileged: true
     
     volumes:
+      # Map backend source code for instant updates
+      - ./backend:/app/backend
       # Map persistent database, recordings, and configuration directories
       - ./backend/data:/app/backend/data
       # Map host USB devices to the container for SDR hardware detection

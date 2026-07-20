@@ -1564,6 +1564,7 @@ const WaterfallSettings = forwardRef(function WaterfallSettings({ playbackRemain
                     expanded={expandedPanels.includes('weather')}
                     onAccordionChange={handleWeatherAccordionChange}
                     selectedSDRId={selectedSDRId}
+                    sdrs={sdrs}
                     isStreaming={isStreaming}
                 />
 

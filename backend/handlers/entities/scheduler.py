@@ -367,6 +367,31 @@ async def trigger_instant_weather_decode(
         now_iso = now.isoformat().replace("+00:00", "Z")
         future_iso = (now + datetime.timedelta(hours=24)).isoformat().replace("+00:00", "Z")
 
+        # Extract optional custom parameters from payload
+        custom_gain = data.get("gain")
+        custom_lna_agc = data.get("lna_agc", False)
+        custom_bias = data.get("bias", False) or data.get("bias_t", False)
+        custom_freq = data.get("frequency_hz")
+        custom_sample_rate = data.get("sample_rate")
+
+        sdr_config = {
+            **sdr_data,
+            "gain": float(custom_gain) if custom_gain is not None else sdr_data.get("gain", 40.2),
+            "lna_agc": bool(custom_lna_agc),
+            "bias_t": bool(custom_bias),
+            "antenna_port": sdr_data.get("antenna_port", "RX"),
+            "sample_rate": float(custom_sample_rate) if custom_sample_rate is not None else sdr_data.get("sample_rate", 2.048e6),
+        }
+
+        task_config = {
+            "pipeline_id": pipeline_id,
+            "output_dir": f"decoded/{pipeline_id}_{obs_id[:8]}",
+        }
+        if custom_freq is not None:
+            task_config["frequency_hz"] = float(custom_freq)
+        if custom_sample_rate is not None:
+            task_config["sample_rate"] = float(custom_sample_rate)
+
         observation_payload = {
             "id": obs_id,
             "name": f"Live SatDump {pipeline_id.upper()}",
@@ -386,19 +411,11 @@ async def trigger_instant_weather_decode(
             "task_start_elevation": 10.0,
             "sessions": [
                 {
-                    "sdr": {
-                        **sdr_data,
-                        "gain": sdr_data.get("gain", 40.2),
-                        "antenna_port": sdr_data.get("antenna_port", "RX"),
-                        "sample_rate": sdr_data.get("sample_rate", 2048000),
-                    },
+                    "sdr": sdr_config,
                     "tasks": [
                         {
                             "type": "weather_decoder",
-                            "config": {
-                                "pipeline_id": pipeline_id,
-                                "output_dir": f"decoded/{pipeline_id}_{obs_id[:8]}",
-                            }
+                            "config": task_config
                         }
                     ]
                 }
