@@ -257,17 +257,6 @@ app = FastAPI(
     redoc_url="/api/redoc",
     openapi_url="/api/openapi.json",
 )
-socket_app = socketio.ASGIApp(sio, other_asgi_app=app)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
 class StripSubpathMiddleware:
     def __init__(self, app):
         self.app = app
@@ -308,7 +297,11 @@ class StripSubpathMiddleware:
         await self.app(scope, receive, send)
 
 
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 app.add_middleware(StripSubpathMiddleware)
+
+raw_socket_app = socketio.ASGIApp(sio, other_asgi_app=app)
+socket_app = StripSubpathMiddleware(raw_socket_app)
 
 
 

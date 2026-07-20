@@ -1,4 +1,4 @@
-version: '3.8'
+# version: '3.8'
 
 services:
   ground-station:
@@ -8,7 +8,7 @@ services:
     container_name: ground-station
     restart: unless-stopped
     ports:
-      - "7000:7000"
+      - "7070:7000"
     
     # Privileged is required to access USB SDR hardware directly
     privileged: true
