@@ -114,7 +114,31 @@ def rtlsdr_worker_process(
         logical_center_freq = config.get("center_freq", 100e6)
         sdr.center_freq = logical_center_freq + offset_freq
         sdr.sample_rate = config.get("sample_rate", 2.048e6)
-        sdr.gain = config.get("gain", 25.4)
+
+        # Apply initial Bias-T, AGC, and Gain settings on startup
+        bias_t = config.get("bias_t", False)
+        try:
+            sdr.set_bias_tee(bias_t)
+            logger.info(f"Initial Bias-T set to: {bias_t}")
+        except Exception as e:
+            logger.warning(f"Could not set initial bias tee: {e}")
+
+        rtl_agc = config.get("rtl_agc", False)
+        try:
+            sdr.set_agc_mode(rtl_agc)
+            logger.info(f"Initial RTL AGC set to: {rtl_agc}")
+        except Exception as e:
+            logger.warning(f"Could not set initial RTL AGC: {e}")
+
+        tuner_agc = config.get("tuner_agc", False)
+        try:
+            sdr.set_manual_gain_enabled(not tuner_agc)
+            logger.info(f"Initial Tuner AGC set to: {tuner_agc}")
+        except Exception as e:
+            logger.warning(f"Could not set initial tuner AGC: {e}")
+
+        if not tuner_agc:
+            sdr.gain = config.get("gain", 25.4)
 
         logger.info(
             "RTL-SDR configured: "
