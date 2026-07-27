@@ -716,6 +716,24 @@ async def regenerate_observations(
         }
 
 
+async def get_weather_logs(
+    sio: Any, data: Optional[Dict], logger: Any, sid: str
+) -> Dict[str, Union[bool, list, str]]:
+    """
+    Retrieve cached logs for an active weather satellite live decoder session.
+    """
+    if not data or not isinstance(data, dict):
+        return {"success": False, "error": "Invalid payload"}
+
+    decoder_id = data.get("decoder_id")
+    if not decoder_id:
+        return {"success": False, "error": "decoder_id is required"}
+
+    from weather.manager import get_decoder_logs
+    logs = get_decoder_logs(decoder_id)
+    return {"success": True, "data": logs}
+
+
 def register_handlers(registry):
     """Register scheduler handlers with the command registry."""
     registry.register_batch(
@@ -728,6 +746,7 @@ def register_handlers(registry):
             "toggle-observation-enabled": (toggle_observation_enabled, "api_call"),
             "cancel-observation": (cancel_observation, "api_call"),
             "trigger-instant-weather-decode": (trigger_instant_weather_decode, "api_call"),
+            "get-weather-logs": (get_weather_logs, "api_call"),
             # Monitored satellites
             "get-monitored-satellites": (get_monitored_satellites, "api_call"),
             "create-monitored-satellite": (create_monitored_satellite, "api_call"),

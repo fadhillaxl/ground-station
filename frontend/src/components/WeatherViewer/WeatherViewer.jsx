@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Box, Grid, Paper, FormControl, InputLabel, Select, MenuItem, Stack, Typography } from '@mui/material';
 import { useSocket } from '../common/socket.jsx';
 import SignalInfo from './SignalInfo.jsx';
 import Constellation from './Constellation.jsx';
 import ImageCanvas from './ImageCanvas.jsx';
 import { useSelector } from 'react-redux';
-import { Satellite as SatelliteIcon } from '@mui/icons-material';
+import { Satellite as SatelliteIcon, Terminal as TerminalIcon } from '@mui/icons-material';
 import { getFlattenedTasks } from '../scheduler/session-utils.js';
 
 // Color enhancement filters for canvas overlay
@@ -45,9 +45,22 @@ export default function WeatherViewer({ decoderId }) {
   });
   const [imageUpdate, setImageUpdate] = useState(null);
   const [selectedPalette, setSelectedPalette] = useState('default');
+  const [logs, setLogs] = useState([]);
+  
+  const consoleRef = useRef(null);
 
   useEffect(() => {
     if (!socket || !resolvedDecoderId) return;
+
+    // Fetch initial log lines
+    socket.emit("api.call", {
+      cmd: 'get-weather-logs',
+      data: { decoder_id: resolvedDecoderId }
+    }, (response) => {
+      if (response && response.success && Array.isArray(response.data)) {
+        setLogs(response.data);
+      }
+    });
 
     // Connect socket listeners for weather live events
     const handleSignalUpdate = (packet) => {
@@ -62,14 +75,35 @@ export default function WeatherViewer({ decoderId }) {
       }
     };
 
+    const handleNewLog = (packet) => {
+      if (packet && packet.decoder_id === resolvedDecoderId) {
+        setLogs((prev) => {
+          const next = [...prev, packet];
+          if (next.length > 500) {
+            next.shift();
+          }
+          return next;
+        });
+      }
+    };
+
     socket.on('weather_signal', handleSignalUpdate);
     socket.on('weather_image_update', handleImageUpdate);
+    socket.on('weather.log', handleNewLog);
 
     return () => {
       socket.off('weather_signal', handleSignalUpdate);
       socket.off('weather_image_update', handleImageUpdate);
+      socket.off('weather.log', handleNewLog);
     };
   }, [socket, resolvedDecoderId]);
+
+  // Auto-scroll to bottom of console
+  useEffect(() => {
+    if (consoleRef.current) {
+      consoleRef.current.scrollTop = consoleRef.current.scrollHeight;
+    }
+  }, [logs]);
 
   if (!resolvedDecoderId) {
     return (
@@ -118,6 +152,74 @@ export default function WeatherViewer({ decoderId }) {
                 ))}
               </Select>
             </FormControl>
+          </Paper>
+
+          {/* Live CLI Logs Console */}
+          <Paper 
+            sx={{ 
+              p: 2, 
+              border: '1px solid', 
+              borderColor: 'divider', 
+              borderRadius: 2,
+              display: 'flex',
+              flexDirection: 'column',
+              backgroundColor: '#0c0c0d',
+              color: '#f0f0f0'
+            }}
+          >
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1, color: '#39ff14' }}>
+                <TerminalIcon fontSize="small" /> SatDump CLI Logs
+              </Typography>
+              <Typography 
+                variant="caption" 
+                sx={{ 
+                  cursor: 'pointer', 
+                  color: '#888', 
+                  '&:hover': { color: '#ccc' } 
+                }}
+                onClick={() => setLogs([])}
+              >
+                Clear
+              </Typography>
+            </Box>
+            <Box 
+              ref={consoleRef}
+              sx={{ 
+                height: 200, 
+                overflowY: 'auto', 
+                fontFamily: 'monospace', 
+                fontSize: '0.70rem', 
+                lineHeight: 1.4,
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-all',
+                backgroundColor: '#18181a',
+                p: 1,
+                borderRadius: 1,
+                border: '1px solid #2d2d30'
+              }}
+            >
+              {logs.length === 0 ? (
+                <Typography variant="caption" sx={{ color: '#666', fontStyle: 'italic', fontFamily: 'monospace' }}>
+                  Waiting for SatDump output logs...
+                </Typography>
+              ) : (
+                logs.map((log, idx) => (
+                  <Box 
+                    key={idx} 
+                    sx={{ 
+                      color: log.stream === 'stderr' ? '#ff6b6b' : '#39ff14',
+                      mb: 0.5 
+                    }}
+                  >
+                    <span style={{ color: '#666', marginRight: 8 }}>
+                      {log.timestamp ? new Date(log.timestamp * 1000).toLocaleTimeString() : ''}
+                    </span>
+                    {log.message}
+                  </Box>
+                ))
+              )}
+            </Box>
           </Paper>
 
         </Grid>

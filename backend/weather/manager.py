@@ -168,6 +168,7 @@ async def start_live_decoder(
             "output_dir": str(resolved_output),
             "stdout_task": asyncio.create_task(_log_output(decoder_id, process.stdout, "stdout")),
             "stderr_task": asyncio.create_task(_log_output(decoder_id, process.stderr, "stderr")),
+            "logs": [],
         }
 
         logger.info(f"SatDump process started with PID {process.pid} on HTTP port {http_port}")
@@ -210,6 +211,8 @@ async def stop_live_decoder(decoder_id: str) -> bool:
     return True
 
 
+import time
+
 async def _log_output(decoder_id: str, stream: asyncio.StreamReader, name: str):
     """Utility to read output from SatDump stream and print to logs."""
     try:
@@ -221,7 +224,35 @@ async def _log_output(decoder_id: str, stream: asyncio.StreamReader, name: str):
             if line_decoded:
                 # Log debug info from SatDump
                 logger.debug(f"[SatDump-{decoder_id}-{name}] {line_decoded}")
+                
+                # Cache logs for newly connected clients
+                if decoder_id in active_processes:
+                    proc_logs = active_processes[decoder_id].setdefault("logs", [])
+                    proc_logs.append({
+                        "stream": name,
+                        "message": line_decoded,
+                        "timestamp": time.time()
+                    })
+                    if len(proc_logs) > 500:
+                        proc_logs.pop(0)
+
+                # Emit websocket event
+                from weather.websocket import emit_weather_event
+                await emit_weather_event("weather.log", {
+                    "decoder_id": decoder_id,
+                    "stream": name,
+                    "message": line_decoded,
+                    "timestamp": time.time()
+                })
     except asyncio.CancelledError:
         pass
     except Exception as e:
         logger.error(f"Error reading stream {name} for decoder {decoder_id}: {e}")
+
+
+def get_decoder_logs(decoder_id: str) -> list[Dict[str, Any]]:
+    """Returns the cached logs for the given active decoder."""
+    proc_info = active_processes.get(decoder_id)
+    if proc_info:
+        return proc_info.get("logs", [])
+    return []
