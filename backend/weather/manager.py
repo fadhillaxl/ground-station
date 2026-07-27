@@ -108,6 +108,8 @@ async def start_live_decoder(
         logger.warning(f"Live decoder {decoder_id} is already running.")
         return active_processes[decoder_id]["port"]
 
+    logger.info(f"Starting live decoder {decoder_id} with sdr_config: {sdr_config}")
+
     # Retrieve pipeline config
     pipeline_info = gk2a.PIPELINES.get(pipeline_id)
     if not pipeline_info:
