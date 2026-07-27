@@ -233,37 +233,68 @@ async def stop_live_decoder(decoder_id: str) -> bool:
 
 import time
 
+async def _process_line(decoder_id: str, line_decoded: str, name: str):
+    """Logs, caches, and emits a single decoded line."""
+    # Log debug info from SatDump
+    logger.debug(f"[SatDump-{decoder_id}-{name}] {line_decoded}")
+    
+    # Cache logs for newly connected clients
+    if decoder_id in active_processes:
+        proc_logs = active_processes[decoder_id].setdefault("logs", [])
+        proc_logs.append({
+            "stream": name,
+            "message": line_decoded,
+            "timestamp": time.time()
+        })
+        if len(proc_logs) > 500:
+            proc_logs.pop(0)
+
+    # Emit websocket event
+    from weather.websocket import emit_weather_event
+    await emit_weather_event("weather.log", {
+        "decoder_id": decoder_id,
+        "stream": name,
+        "message": line_decoded,
+        "timestamp": time.time()
+    })
+
+
 async def _log_output(decoder_id: str, stream: asyncio.StreamReader, name: str):
     """Utility to read output from SatDump stream and print to logs."""
     try:
+        buffer = ""
         while True:
-            line = await stream.readline()
-            if not line:
+            # Read chunks of up to 4096 bytes instead of line-by-line
+            chunk = await stream.read(4096)
+            if not chunk:
+                if buffer.strip():
+                    await _process_line(decoder_id, buffer.strip(), name)
                 break
-            line_decoded = line.decode('utf-8', errors='ignore').rstrip()
-            if line_decoded:
-                # Log debug info from SatDump
-                logger.debug(f"[SatDump-{decoder_id}-{name}] {line_decoded}")
+            
+            buffer += chunk.decode('utf-8', errors='ignore')
+            
+            # Split by either carriage return (\r) or line feed (\n)
+            # to handle real-time CLI progress bars (\r) properly
+            while True:
+                pos_lf = buffer.find("\n")
+                pos_cr = buffer.find("\r")
                 
-                # Cache logs for newly connected clients
-                if decoder_id in active_processes:
-                    proc_logs = active_processes[decoder_id].setdefault("logs", [])
-                    proc_logs.append({
-                        "stream": name,
-                        "message": line_decoded,
-                        "timestamp": time.time()
-                    })
-                    if len(proc_logs) > 500:
-                        proc_logs.pop(0)
-
-                # Emit websocket event
-                from weather.websocket import emit_weather_event
-                await emit_weather_event("weather.log", {
-                    "decoder_id": decoder_id,
-                    "stream": name,
-                    "message": line_decoded,
-                    "timestamp": time.time()
-                })
+                if pos_lf == -1 and pos_cr == -1:
+                    break
+                
+                if pos_lf != -1 and pos_cr != -1:
+                    pos = min(pos_lf, pos_cr)
+                else:
+                    pos = pos_lf if pos_lf != -1 else pos_cr
+                
+                line = buffer[:pos]
+                buffer = buffer[pos + 1:]
+                
+                # Only process non-empty lines
+                cleaned_line = line.strip()
+                if cleaned_line:
+                    await _process_line(decoder_id, cleaned_line, name)
+                    
     except asyncio.CancelledError:
         pass
     except Exception as e:
