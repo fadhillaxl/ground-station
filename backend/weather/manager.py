@@ -146,8 +146,8 @@ async def start_live_decoder(
 
     # Add general parameters
     cmd.extend([
-        "--frequency", f"{target_freq:.6e}" if isinstance(target_freq, float) else str(target_freq),
-        "--samplerate", f"{target_rate:.6e}" if isinstance(target_rate, float) else str(target_rate),
+        "--frequency", str(int(target_freq)),
+        "--samplerate", str(int(target_rate)),
         "--http_server", http_addr,
         "--dc_block"
     ])

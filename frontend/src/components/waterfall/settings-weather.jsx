@@ -85,8 +85,8 @@ const WeatherAccordion = ({
     const commandPreview = useMemo(() => {
         const pipelineArg = pipelineId;
         const outDirArg = `./output_${pipelineId}`;
-        const freqHzStr = `${frequencyMHz}e6`;
-        const rateHzStr = `${sampleRateMSPS}e6`;
+        const freqHzStr = String(Math.round(parseFloat(frequencyMHz) * 1e6));
+        const rateHzStr = String(Math.round(parseFloat(sampleRateMSPS) * 1e6));
         
         let srcArgs = '--source rtlsdr';
         if (activeSDR) {
