@@ -116,7 +116,7 @@ async def start_live_decoder(
     if sdr_id and ("type" not in sdr_config or "host" not in sdr_config):
         try:
             from crud.hardware import fetch_sdr
-            from db.session import AsyncSessionLocal
+            from db import AsyncSessionLocal
             async with AsyncSessionLocal() as session:
                 db_res = await fetch_sdr(session, sdr_id)
                 if db_res["success"] and db_res["data"]:
