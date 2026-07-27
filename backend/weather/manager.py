@@ -215,7 +215,7 @@ async def stop_live_decoder(decoder_id: str) -> bool:
         # Wait up to 5 seconds for termination
         try:
             await asyncio.wait_for(process.wait(), timeout=5.0)
-        except asyncio.TimeoutExpired:
+        except asyncio.TimeoutError:
             logger.warning(f"Process {process.pid} did not exit gracefully, killing...")
             process.kill()
             await process.wait()

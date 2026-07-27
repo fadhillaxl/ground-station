@@ -104,17 +104,17 @@ async def _bridge_polling_loop(decoder_id: str, http_port: int, demod_type: str)
                     data = response.json()
                     
                     # Extract variables from SatDump JSON output
-                    demod_block = data.get("psk_demod", {})
+                    demod_block = data.get("psk_demod") or {}
                     
                     # Look for decoder blocks dynamically
                     decoder_block = {}
                     for key, val in data.items():
-                        if "decoder" in key or "deframer" in key:
+                        if ("decoder" in key or "deframer" in key) and val is not None:
                             decoder_block = val
                             break
                     
                     # Extract SNR (sometimes it's reported as linear or directly in dB)
-                    raw_snr = float(demod_block.get("snr", 0.0))
+                    raw_snr = float(demod_block.get("snr", 0.0)) if demod_block else 0.0
                     # SatDump linear SNR to dB conversion logic if necessary,
                     # or SatDump might return dB. We check if raw_snr > 0:
                     snr_db = raw_snr
@@ -122,15 +122,15 @@ async def _bridge_polling_loop(decoder_id: str, http_port: int, demod_type: str)
                         # If SNR is fractional power, convert to dB
                         snr_db = 10.0 * math.log10(raw_snr / (1.0 - raw_snr + 1e-6))
                     
-                    freq_offset = float(demod_block.get("freq", 0.0))
-                    peak_snr = float(demod_block.get("peak_snr", 0.0))
+                    freq_offset = float(demod_block.get("freq", 0.0)) if demod_block else 0.0
+                    peak_snr = float(demod_block.get("peak_snr", 0.0)) if demod_block else 0.0
 
                     # Decoder fields
-                    viterbi_lock_val = decoder_block.get("viterbi_lock", 0)
-                    viterbi_lock = bool(viterbi_lock_val) or decoder_block.get("deframer_lock", False)
-                    deframer_lock = decoder_block.get("deframer_lock", False)
-                    rs_errors = int(decoder_block.get("rs_avg", 0))
-                    ber = float(decoder_block.get("viterbi_ber", 0.0))
+                    viterbi_lock_val = decoder_block.get("viterbi_lock", 0) if decoder_block else 0
+                    viterbi_lock = bool(viterbi_lock_val) or (decoder_block.get("deframer_lock", False) if decoder_block else False)
+                    deframer_lock = decoder_block.get("deframer_lock", False) if decoder_block else False
+                    rs_errors = int(decoder_block.get("rs_avg", 0)) if decoder_block else 0
+                    ber = float(decoder_block.get("viterbi_ber", 0.0)) if decoder_block else 0.0
 
                     # Synthesize constellation points for UI rendering
                     constellation = generate_constellation_points(demod_type, snr_db)
@@ -152,7 +152,8 @@ async def _bridge_polling_loop(decoder_id: str, http_port: int, demod_type: str)
                 # Silently catch request errors (e.g. server is starting up or shut down)
                 logger.debug(f"Telemetry bridge request error: {e}")
             except Exception as e:
-                logger.error(f"Error parsing SatDump telemetry: {e}")
+                raw_text = response.text if 'response' in locals() else 'No response'
+                logger.error(f"Error parsing SatDump telemetry: {e}. Raw response: {raw_text}")
 
             # Emit packet to frontend via Socket.IO default namespace
             await emit_weather_event(
