@@ -110,6 +110,21 @@ async def start_live_decoder(
 
     logger.info(f"Starting live decoder {decoder_id} with sdr_config: {sdr_config}")
 
+    # If the sdr_config is a session dict missing DB details (type, host, port),
+    # fetch the full SDR configuration from the database using sdr_id.
+    sdr_id = sdr_config.get("sdr_id")
+    if sdr_id and ("type" not in sdr_config or "host" not in sdr_config):
+        try:
+            from crud.hardware import fetch_sdr
+            from db.session import AsyncSessionLocal
+            async with AsyncSessionLocal() as session:
+                db_res = await fetch_sdr(session, sdr_id)
+                if db_res["success"] and db_res["data"]:
+                    logger.info(f"Merged DB configuration for SDR {sdr_id}")
+                    sdr_config = {**db_res["data"], **sdr_config}
+        except Exception as e:
+            logger.error(f"Failed to fetch full SDR config from DB for {sdr_id}: {e}")
+
     # Retrieve pipeline config
     pipeline_info = gk2a.PIPELINES.get(pipeline_id)
     if not pipeline_info:
