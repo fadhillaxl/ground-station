@@ -148,12 +148,9 @@ async def start_live_decoder(
     http_port = find_free_port()
     http_addr = f"127.0.0.1:{http_port}"
 
-    # Build command line arguments with stdbuf to force line-buffering
+    # Build command line arguments
     # satdump live <pipeline> <out_dir> --source <src> [args] --samplerate <sr> --frequency <freq> --http_server <addr>
     cmd = [
-        "stdbuf",
-        "-oL",
-        "-eL",
         "satdump",
         "live",
         satdump_pipeline,
