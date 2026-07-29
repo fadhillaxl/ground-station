@@ -6,15 +6,13 @@ import LockOpenIcon from '@mui/icons-material/LockOpen';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 
 export default function SignalInfo({ signalData }) {
-  const {
-    snr = 0.0,
-    peak_snr = 0.0,
-    freq_offset = 0.0,
-    viterbi_lock = false,
-    deframer_lock = false,
-    rs_errors = 0,
-    ber = 0.0
-  } = signalData || {};
+  const snr = typeof (signalData?.snr) === 'number' ? signalData.snr : 0.0;
+  const peak_snr = typeof (signalData?.peak_snr) === 'number' ? signalData.peak_snr : 0.0;
+  const freq_offset = typeof (signalData?.freq_offset) === 'number' ? signalData.freq_offset : 0.0;
+  const viterbi_lock = Boolean(signalData?.viterbi_lock);
+  const deframer_lock = Boolean(signalData?.deframer_lock);
+  const rs_errors = typeof (signalData?.rs_errors) === 'number' ? signalData.rs_errors : 0;
+  const ber = typeof (signalData?.ber) === 'number' ? signalData.ber : 0.0;
 
   // Color logic for SNR quality
   const getSnrColor = (val) => {

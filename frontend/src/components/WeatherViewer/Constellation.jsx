@@ -49,7 +49,8 @@ export default function Constellation({ points = [] }) {
     ctx.shadowBlur = 4;
     ctx.shadowColor = 'rgba(0, 229, 255, 0.8)';
     
-    for (const point of points) {
+    const safePoints = Array.isArray(points) ? points : [];
+    for (const point of safePoints) {
       if (Array.isArray(point) && point.length === 2) {
         const i = point[0];
         const q = point[1];

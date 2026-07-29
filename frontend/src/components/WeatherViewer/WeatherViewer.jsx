@@ -50,6 +50,7 @@ export default function WeatherViewer({ decoderId }) {
   const consoleRef = useRef(null);
 
   useEffect(() => {
+    console.log("WeatherViewer useEffect active. resolvedDecoderId:", resolvedDecoderId);
     if (!socket || !resolvedDecoderId) return;
 
     // Fetch initial log lines
@@ -64,12 +65,15 @@ export default function WeatherViewer({ decoderId }) {
 
     // Connect socket listeners for weather live events
     const handleSignalUpdate = (packet) => {
+      console.log("handleSignalUpdate packet received:", packet);
       if (packet && packet.decoder_id === resolvedDecoderId) {
+        console.log("Setting signalData:", packet.data);
         setSignalData(packet.data);
       }
     };
 
     const handleImageUpdate = (packet) => {
+      console.log("handleImageUpdate packet received:", packet);
       if (packet && packet.decoder_id === resolvedDecoderId) {
         setImageUpdate(packet);
       }
@@ -92,6 +96,7 @@ export default function WeatherViewer({ decoderId }) {
     socket.on('weather.log', handleNewLog);
 
     return () => {
+      console.log("Cleaning up WeatherViewer socket listeners");
       socket.off('weather_signal', handleSignalUpdate);
       socket.off('weather_image_update', handleImageUpdate);
       socket.off('weather.log', handleNewLog);
