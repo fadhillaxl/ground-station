@@ -71,7 +71,7 @@ export default function Constellation({ points = [] }) {
   }, [points]);
 
   return (
-    <Card sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+    <Card sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, flexShrink: 0 }}>
       <CardContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <Typography variant="h6" color="primary" sx={{ display: 'flex', alignItems: 'center', mb: 2, fontWeight: 'bold', alignSelf: 'flex-start', width: '100%' }}>
           <GpsFixedIcon sx={{ mr: 1 }} /> Constellation Diagram (I/Q)

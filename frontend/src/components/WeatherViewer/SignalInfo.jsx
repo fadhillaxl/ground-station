@@ -22,7 +22,7 @@ export default function SignalInfo({ signalData }) {
   };
 
   return (
-    <Card sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+    <Card sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, flexShrink: 0 }}>
       <CardContent>
         <Typography variant="h6" color="primary" sx={{ display: 'flex', alignItems: 'center', mb: 2, fontWeight: 'bold' }}>
           <SignalCellularAltIcon sx={{ mr: 1 }} /> Signal & Demodulator Diagnostics

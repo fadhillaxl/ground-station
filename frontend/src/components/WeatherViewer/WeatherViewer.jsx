@@ -140,7 +140,7 @@ export default function WeatherViewer({ decoderId }) {
           <Constellation points={signalData.constellation} />
 
           {/* Image Enhancements */}
-          <Paper sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+          <Paper sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2, flexShrink: 0 }}>
             <Typography variant="subtitle1" color="primary" sx={{ fontWeight: 'bold', mb: 2 }}>
               Enhancement Palettes
             </Typography>
@@ -169,7 +169,8 @@ export default function WeatherViewer({ decoderId }) {
               display: 'flex',
               flexDirection: 'column',
               backgroundColor: '#0c0c0d',
-              color: '#f0f0f0'
+              color: '#f0f0f0',
+              flexShrink: 0
             }}
           >
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
