@@ -186,10 +186,12 @@ async def start_live_decoder(
     ]
 
     try:
+        import os
         process = await asyncio.create_subprocess_exec(
             *run_cmd,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+            stderr=asyncio.subprocess.PIPE,
+            preexec_fn=os.setsid
         )
 
         active_processes[decoder_id] = {
@@ -202,7 +204,7 @@ async def start_live_decoder(
             "logs": [],
         }
 
-        logger.info(f"SatDump process started with PID {process.pid} on HTTP port {http_port}")
+        logger.info(f"SatDump process started in process group with PID {process.pid} on HTTP port {http_port}")
         return http_port
 
     except Exception as e:
@@ -218,20 +220,32 @@ async def stop_live_decoder(decoder_id: str) -> bool:
         return False
 
     process = proc_info["process"]
-    logger.info(f"Stopping live decoder {decoder_id} (PID {process.pid})")
+    pgid = process.pid
+    logger.info(f"Stopping live decoder {decoder_id} process group (PGID {pgid})")
 
-    # Terminate process group or process politely
+    # Terminate the entire process group politely (script + sh + satdump)
     try:
-        process.terminate()
+        import os
+        import signal
+        try:
+            os.killpg(pgid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+
         # Wait up to 5 seconds for termination
         try:
             await asyncio.wait_for(process.wait(), timeout=5.0)
         except asyncio.TimeoutError:
-            logger.warning(f"Process {process.pid} did not exit gracefully, killing...")
-            process.kill()
+            logger.warning(f"Process group {pgid} did not exit gracefully, killing...")
+            try:
+                os.killpg(pgid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            except Exception as kill_err:
+                logger.error(f"Error sending SIGKILL to process group {pgid}: {kill_err}")
             await process.wait()
     except Exception as e:
-        logger.error(f"Error terminating SatDump process {process.pid}: {e}")
+        logger.error(f"Error terminating process group {pgid}: {e}")
 
     # Cancel logger tasks
     proc_info["stdout_task"].cancel()
