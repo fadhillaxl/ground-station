@@ -109,29 +109,43 @@ export default function MeteorM2xLrptFolderDialog({ open, onClose, folder }) {
 
     if (!folder) return null;
 
-    // Categorize images by type
-    const rawChannels = folder.images?.filter(img => /MSU-MR-\d\.png$/.test(img.filename)) || [];
-    const rgbComposites = folder.images?.filter(img =>
-        img.filename.includes('rgb_') &&
-        !img.filename.includes('_map') &&
-        !img.filename.includes('_corrected')
-    ) || [];
-    const irImages = folder.images?.filter(img => img.filename.includes('3.9_um')) || [];
-    const mapProjections = folder.images?.filter(img => img.filename.endsWith('_map.png')) || [];
-    const corrected = folder.images?.filter(img =>
-        img.filename.includes('_corrected') &&
-        !img.filename.includes('_map')
-    ) || [];
+    const isMeteor = String(folder.pipeline || '').toLowerCase().includes('meteor');
+    
+    let categories = [];
+    if (isMeteor) {
+        const rawChannels = folder.images?.filter(img => /MSU-MR-\d\.png$/.test(img.filename)) || [];
+        const rgbComposites = folder.images?.filter(img =>
+            img.filename.includes('rgb_') &&
+            !img.filename.includes('_map') &&
+            !img.filename.includes('_corrected')
+        ) || [];
+        const irImages = folder.images?.filter(img => img.filename.includes('3.9_um')) || [];
+        const mapProjections = folder.images?.filter(img => img.filename.endsWith('_map.png')) || [];
+        const corrected = folder.images?.filter(img =>
+            img.filename.includes('_corrected') &&
+            !img.filename.includes('_map')
+        ) || [];
 
-    const categories = [
-        { label: 'RGB Composites', images: rgbComposites },
-        { label: 'Map Projections', images: mapProjections },
-        { label: 'Corrected', images: corrected },
-        { label: 'IR Images', images: irImages },
-        { label: 'Raw Channels', images: rawChannels },
-        { label: 'All Images', images: folder.images || [] },
-        { label: 'Metadata', images: null, isMetadata: true },
-    ].filter(cat => cat.isMetadata || (cat.images && cat.images.length > 0));
+        categories = [
+            { label: 'RGB Composites', images: rgbComposites },
+            { label: 'Map Projections', images: mapProjections },
+            { label: 'Corrected', images: corrected },
+            { label: 'IR Images', images: irImages },
+            { label: 'Raw Channels', images: rawChannels },
+            { label: 'All Images', images: folder.images || [] },
+            { label: 'Metadata', images: null, isMetadata: true },
+        ].filter(cat => cat.isMetadata || (cat.images && cat.images.length > 0));
+    } else {
+        const mapProjections = folder.images?.filter(img => img.filename.includes('map') || img.filename.endsWith('_map.png')) || [];
+        const otherImages = folder.images?.filter(img => !img.filename.includes('map') && !img.filename.endsWith('_map.png')) || [];
+
+        categories = [
+            { label: 'Decoded Products', images: otherImages },
+            { label: 'Map Projections', images: mapProjections },
+            { label: 'All Images', images: folder.images || [] },
+            { label: 'Metadata', images: null, isMetadata: true },
+        ].filter(cat => cat.isMetadata || (cat.images && cat.images.length > 0));
+    }
 
     const handleDownloadFolder = () => {
         const downloadUrl = resolveUrl(`/api/decoded/${encodeURIComponent(folder.foldername)}/download`);

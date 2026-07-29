@@ -572,9 +572,9 @@ async def filebrowser_request_routing(sio, cmd, data, logger, sid):
 
             # Gather and process decoded files if filter enabled
             if show_decoded and decoded_dir.exists():
-                # STEP 1: Find all SatDump folders (directories with .satdump_ in name)
+                # STEP 1: Find all decoded folders (non-hidden subdirectories)
                 satdump_folders = [
-                    d for d in decoded_dir.iterdir() if d.is_dir() and ".satdump_" in d.name
+                    d for d in decoded_dir.iterdir() if d.is_dir() and not d.name.startswith(".")
                 ]
 
                 for idx, folder in enumerate(satdump_folders):
@@ -658,6 +658,28 @@ async def filebrowser_request_routing(sio, cmd, data, logger, sid):
                             timestamp_str = (
                                 f"{parts[2]}_{parts[3]}" if len(parts) >= 4 else parts[2]
                             )
+                    else:
+                        # General SatDump/GK-2A folder format (e.g. gk2a_lrit_83ecdf25)
+                        name_lower = folder.name.lower()
+                        if "gk2a" in name_lower:
+                            sat_name = "GK-2A"
+                            if "lrit" in name_lower:
+                                pipeline = "gk2a_lrit"
+                            elif "hrit" in name_lower:
+                                pipeline = "gk2a_hrit"
+                        else:
+                            parts = folder.name.split("_")
+                            if len(parts) >= 2:
+                                sat_name = parts[0].upper()
+                                pipeline = "_".join(parts[:-1])
+                        
+                        # Use the hex/unique suffix as ID or timestamp placeholder
+                        parts = folder.name.split("_")
+                        if len(parts) >= 2:
+                            sat_id = parts[-1]
+
+                    if not timestamp_str:
+                        timestamp_str = datetime.fromtimestamp(folder_stat.st_ctime, timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
                     # Always serve the lightweight generated thumbnail for folder cards.
                     thumbnail_url = get_decoded_thumbnail_url(folder, lazy_generate=True)
