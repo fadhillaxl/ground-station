@@ -600,6 +600,7 @@ class ObservationExecutor:
                 "satellite_name": satellite.get("name"),
                 "norad_id": satellite.get("norad_id"),
             }
+            has_weather_task = any(task.get("type") == "weather_decoder" for task in tasks)
             session_id = await session_service.register_internal_observation(
                 observation_id=observation_id,
                 sdr_device=sdr_device,
@@ -607,6 +608,7 @@ class ObservationExecutor:
                 vfo_number=1,  # Register with VFO 1 initially
                 metadata=metadata,
                 session_key=session_key,
+                skip_sdr_start=has_weather_task,
             )
 
             logger.info(f"Internal session created: {session_id}")

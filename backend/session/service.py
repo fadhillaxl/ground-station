@@ -165,6 +165,7 @@ class SessionService:
         vfo_number: int,
         metadata: Optional[Dict[str, Any]] = None,
         session_key: Optional[str] = None,
+        skip_sdr_start: bool = False,
     ) -> str:
         """
         Register and start an internal observation session.
@@ -177,6 +178,8 @@ class SessionService:
             sdr_config: SDR configuration dictionary
             vfo_number: VFO number (1-4)
             metadata: Optional additional metadata for the observation
+            session_key: Optional unique session key
+            skip_sdr_start: If True, do not configure or start standard SDR streaming process
 
         Returns:
             Internal session ID (e.g., "internal:obs-abc-123")
@@ -188,11 +191,12 @@ class SessionService:
             observation_id, sdr_config["sdr_id"], vfo_number, metadata, session_key=session_key
         )
 
-        # Configure SDR
-        await self.configure_sdr(session_id, sdr_device, sdr_config)
+        if not skip_sdr_start:
+            # Configure SDR
+            await self.configure_sdr(session_id, sdr_device, sdr_config)
 
-        # Start streaming
-        await self.start_streaming(session_id, sdr_device)
+            # Start streaming
+            await self.start_streaming(session_id, sdr_device)
 
         return str(session_id)
 
