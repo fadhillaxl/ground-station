@@ -42,7 +42,7 @@ def map_sdr_config_to_args(sdr_config: Dict[str, Any]) -> list[str]:
 
     gain = sdr_config.get("gain", 40.0)
     bias_t = sdr_config.get("bias_t", False) or sdr_config.get("bias", False)
-    lna_agc = sdr_config.get("lna_agc", False)
+    lna_agc = sdr_config.get("lna_agc", True)
 
     args = []
 
@@ -57,7 +57,7 @@ def map_sdr_config_to_args(sdr_config: Dict[str, Any]) -> list[str]:
         else:
             args.extend(["--source", "rtlsdr"])
         
-        args.extend(["--gain", str(gain)])
+        args.extend(["--gain", str(int(float(gain)))])
         if lna_agc:
             args.append("--lna_agc")
         if bias_t:
@@ -165,9 +165,12 @@ async def start_live_decoder(
     cmd.extend(source_args)
 
     # Add general parameters
+    # Format frequency and samplerate to scientific notation e.g., 1692.14e6 and 2.048e6
+    freq_str = f"{target_freq / 1e6}e6"
+    rate_str = f"{target_rate / 1e6}e6"
     cmd.extend([
-        "--frequency", str(int(target_freq)),
-        "--samplerate", str(int(target_rate)),
+        "--frequency", freq_str,
+        "--samplerate", rate_str,
         "--http_server", http_addr,
         "--dc_block"
     ])
