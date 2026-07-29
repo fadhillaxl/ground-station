@@ -102,6 +102,9 @@ async def _bridge_polling_loop(decoder_id: str, http_port: int, demod_type: str)
                 response = await client.get(url)
                 if response.status_code == 200:
                     data = response.json()
+                    if not isinstance(data, dict):
+                        # SatDump API returned null or a non-object during initialization, skip
+                        data = {}
                     
                     # Extract variables from SatDump JSON output
                     demod_block = data.get("psk_demod") or {}

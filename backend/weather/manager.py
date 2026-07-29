@@ -174,9 +174,20 @@ async def start_live_decoder(
 
     logger.info(f"Launching SatDump command: {' '.join(cmd)}")
 
+    import shlex
+    # Wrap in script command to allocate a pseudo-terminal (PTY)
+    # This forces line-buffering and enables real-time progress/SNR stdout logs in SatDump
+    run_cmd = [
+        "script",
+        "-q",
+        "-c",
+        shlex.join(cmd),
+        "/dev/null"
+    ]
+
     try:
         process = await asyncio.create_subprocess_exec(
-            *cmd,
+            *run_cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
