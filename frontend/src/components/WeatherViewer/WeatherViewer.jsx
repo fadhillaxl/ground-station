@@ -143,7 +143,7 @@ export default function WeatherViewer({ decoderId }) {
       <Grid container spacing={3} sx={{ height: '100%', flex: 1 }}>
         
         {/* Left column: Diagnostics & Controls */}
-        <Grid item xs={12} md={4} lg={3.5} sx={{ display: 'flex', flexDirection: 'column', gap: 3, height: '100%', overflowY: 'auto' }}>
+        <Grid size={{ xs: 12, md: 4, lg: 3.5 }} sx={{ display: 'flex', flexDirection: 'column', gap: 3, height: '100%', overflowY: 'auto' }}>
           
           {/* Signal Quality Panel */}
           <SignalInfo signalData={signalData} />
@@ -243,7 +243,7 @@ export default function WeatherViewer({ decoderId }) {
         </Grid>
 
         {/* Right column: Main Image Canvas & FFT Spectrum */}
-        <Grid item xs={12} md={8} lg={8.5} sx={{ height: '100%', display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <Grid size={{ xs: 12, md: 8, lg: 8.5 }} sx={{ height: '100%', display: 'flex', flexDirection: 'column', gap: 3 }}>
           <Paper
             sx={{
               flex: 1,
