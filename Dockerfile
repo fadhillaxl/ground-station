@@ -474,6 +474,39 @@ RUN git clone --depth=1 https://github.com/SatDump/SatDump.git && \
     sudo make install && \
     sudo ldconfig
 
+# Download and decrypt KMA GK-2A LRIT decryption keys into SatDump resources folder
+RUN pip install --break-system-packages pyDes && \
+    python3 -c ' \
+import urllib.request, zipfile, io, binascii, pyDes, os; \
+url = "http://nmsc.kma.go.kr/resources/enhome/resources/satellites/coms/COMS_Decryption_Sample_Cpp.zip"; \
+print("Downloading KMA Decryption Sample..."); \
+req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"}); \
+try: \
+    with urllib.request.urlopen(req, timeout=120) as response: \
+        zip_data = response.read(); \
+    with zipfile.ZipFile(io.BytesIO(zip_data)) as z: \
+        for f in z.namelist(): \
+            if "EncryptionKeyMessage" in f and f.endswith(".bin"): \
+                enc_data = z.read(f); \
+                print("Found encrypted key file:", f); \
+                break; \
+    mac_hex = "001F2904C905"; \
+    des_key = binascii.unhexlify(mac_hex) + b"\x00\x00"; \
+    header_len = 8; \
+    data_len = 540; \
+    km_data = enc_data[header_len:header_len+data_len]; \
+    k = pyDes.des(des_key, pyDes.ECB, pad=None, padmode=pyDes.PAD_NORMAL); \
+    decrypted = k.decrypt(km_data); \
+    for base_dir in ["/usr/share/satdump", "/usr/local/share/satdump"]: \
+        dest_dir = os.path.join(base_dir, "resources", "gk2a"); \
+        os.makedirs(dest_dir, exist_ok=True); \
+        with open(os.path.join(dest_dir, "EncryptionKeyMessage.bin"), "wb") as f_out: \
+            f_out.write(decrypted); \
+    print("Successfully generated and placed EncryptionKeyMessage.bin in SatDump resources!"); \
+except Exception as e: \
+    print("Warning: Failed to fetch/decrypt GK-2A keys during build:", e); \
+'
+
 # Configure library paths and copy Python bindings
 RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/local.conf && \
     ldconfig && \
