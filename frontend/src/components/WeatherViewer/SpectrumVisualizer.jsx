@@ -273,10 +273,9 @@ export default function SpectrumVisualizer({ decoderId, initialFrequency = 1692.
         </Typography>
       </Box>
 
-      {/* Canvas plots row */}
       <Grid container spacing={2} sx={{ flexGrow: 1, minHeight: 0 }}>
         {/* Spectrum Canvas */}
-        <Grid item xs={12} md={6} sx={{ display: 'flex', flexDirection: 'column' }}>
+        <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex', flexDirection: 'column' }}>
           <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5 }}>FFT RF Spectrum</Typography>
           <Box sx={{ flexGrow: 1, backgroundColor: '#0a0a0c', borderRadius: 2, overflow: 'hidden', border: '1px solid #1c1c1f', minHeight: 120 }}>
             <canvas 
@@ -289,7 +288,7 @@ export default function SpectrumVisualizer({ decoderId, initialFrequency = 1692.
         </Grid>
 
         {/* Waterfall Canvas */}
-        <Grid item xs={12} md={6} sx={{ display: 'flex', flexDirection: 'column' }}>
+        <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex', flexDirection: 'column' }}>
           <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5 }}>Signal History (Waterfall)</Typography>
           <Box sx={{ flexGrow: 1, backgroundColor: '#0a0a0c', borderRadius: 2, overflow: 'hidden', border: '1px solid #1c1c1f', minHeight: 120 }}>
             <canvas 
@@ -306,7 +305,7 @@ export default function SpectrumVisualizer({ decoderId, initialFrequency = 1692.
       <Box sx={{ borderTop: '1px solid', borderColor: 'divider', pt: 1.5 }}>
         <Grid container spacing={3} alignItems="center">
           {/* Fine Tuning offset */}
-          <Grid item xs={12} md={4}>
+          <Grid size={{ xs: 12, md: 4 }}>
             <Typography variant="caption" sx={{ color: 'text.secondary', display: 'flex', justifyContent: 'space-between' }}>
               <span>Fine Tuning Offset</span>
               <span style={{ color: '#00f3ff', fontWeight: 'bold' }}>{freqOffset > 0 ? '+' : ''}{(freqOffset / 1e3).toFixed(1)} kHz</span>
@@ -325,7 +324,7 @@ export default function SpectrumVisualizer({ decoderId, initialFrequency = 1692.
           </Grid>
 
           {/* Gain slider */}
-          <Grid item xs={12} md={4}>
+          <Grid size={{ xs: 12, md: 4 }}>
             <Typography variant="caption" sx={{ color: 'text.secondary', display: 'flex', justifyContent: 'space-between' }}>
               <span>SDR Hardware Gain</span>
               <span style={{ color: 'primary.main', fontWeight: 'bold' }}>{gain} dB</span>
@@ -342,7 +341,7 @@ export default function SpectrumVisualizer({ decoderId, initialFrequency = 1692.
           </Grid>
 
           {/* FFT Options */}
-          <Grid item xs={12} md={4}>
+          <Grid size={{ xs: 12, md: 4 }}>
             <Stack direction="row" spacing={2}>
               <FormControl fullWidth size="small">
                 <InputLabel id="fft-size-label">FFT Resolution</InputLabel>
