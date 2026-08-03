@@ -261,7 +261,8 @@ export default function SpectrumVisualizer({ decoderId, initialFrequency = 1692.
         display: 'flex', 
         flexDirection: 'column', 
         gap: 2,
-        height: '35%'
+        height: 300,
+        flexShrink: 0
       }}
     >
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -277,7 +278,7 @@ export default function SpectrumVisualizer({ decoderId, initialFrequency = 1692.
         {/* Spectrum Canvas */}
         <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex', flexDirection: 'column' }}>
           <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5 }}>FFT RF Spectrum</Typography>
-          <Box sx={{ flexGrow: 1, backgroundColor: '#0a0a0c', borderRadius: 2, overflow: 'hidden', border: '1px solid #1c1c1f', minHeight: 120 }}>
+          <Box sx={{ flexGrow: 1, backgroundColor: '#0a0a0c', borderRadius: 2, overflow: 'hidden', border: '1px solid #1c1c1f', minHeight: 100 }}>
             <canvas 
               ref={fftCanvasRef} 
               width={600} 
@@ -290,7 +291,7 @@ export default function SpectrumVisualizer({ decoderId, initialFrequency = 1692.
         {/* Waterfall Canvas */}
         <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex', flexDirection: 'column' }}>
           <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5 }}>Signal History (Waterfall)</Typography>
-          <Box sx={{ flexGrow: 1, backgroundColor: '#0a0a0c', borderRadius: 2, overflow: 'hidden', border: '1px solid #1c1c1f', minHeight: 120 }}>
+          <Box sx={{ flexGrow: 1, backgroundColor: '#0a0a0c', borderRadius: 2, overflow: 'hidden', border: '1px solid #1c1c1f', minHeight: 100 }}>
             <canvas 
               ref={waterfallCanvasRef} 
               width={600} 
