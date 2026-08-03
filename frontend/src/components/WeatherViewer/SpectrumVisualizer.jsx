@@ -108,10 +108,12 @@ export default function SpectrumVisualizer({ decoderId, initialFrequency = 1692.
   useEffect(() => {
     if (!socket || !decoderId) return;
 
-    // Send initial configuration parameters to proxy (only FFT size and FPS to avoid overriding SDR initial gain/freq)
+    // Send initial configuration parameters to proxy
     sendConfigUpdate({
       fft_size: fftSize,
-      fft_fps: fftFps
+      fft_fps: fftFps,
+      gain: gain,
+      frequency_hz: frequency + freqOffset
     });
 
     const handleFftData = (packet) => {
