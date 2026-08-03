@@ -210,7 +210,7 @@ function ToolbarActions() {
     const showLocationSetupDialog = useSelector((state) => state.dashboard.showLocationSetupDialog);
 
     return (
-        <Stack direction="row" spacing={1.5} alignItems="center" sx={{padding: "6px 0px 0px 0px"}}>
+        <Stack direction="row" sx={{padding: "6px 0px 0px 0px"}}>
             <ConnectionStatus />
             {!showLocationSetupDialog && <LocationWarningPopover />}
             <SatelliteInfoPopover />
@@ -1326,23 +1326,21 @@ export default function Layout() {
                     >
                         {open ? <ChevronLeftIcon /> : <MenuIcon />}
                     </IconButton>
-                    <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
+                    <Box sx={{ flexGrow: 1 }}>
                         <CustomAppTitle />
                     </Box>
                     <Box
                         sx={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 2.5,
+                            position: 'absolute',
+                            left: '50%',
+                            transform: 'translateX(-50%)',
                             pointerEvents: 'none',
                         }}
                     >
                         <ActiveObservationIndicator />
                         <UpcomingObservationIndicator />
                     </Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', flexGrow: 1 }}>
-                        <MemoToolbarActions />
-                    </Box>
+                    <MemoToolbarActions />
                 </Toolbar>
             </CustomAppBar>
 

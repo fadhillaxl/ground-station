@@ -22,92 +22,80 @@ export default function SignalInfo({ signalData }) {
   };
 
   return (
-    <Card sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, flexShrink: 0, backgroundColor: 'background.paper' }}>
-      <CardContent sx={{ p: 2 }}>
-        <Typography variant="subtitle1" color="primary" sx={{ display: 'flex', alignItems: 'center', mb: 1.5, fontWeight: 'bold' }}>
-          <SignalCellularAltIcon sx={{ mr: 1, fontSize: '1.25rem' }} /> Signal & Demodulator Diagnostics
+    <Card sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, flexShrink: 0 }}>
+      <CardContent>
+        <Typography variant="h6" color="primary" sx={{ display: 'flex', alignItems: 'center', mb: 2, fontWeight: 'bold' }}>
+          <SignalCellularAltIcon sx={{ mr: 1 }} /> Signal & Demodulator Diagnostics
         </Typography>
 
-        <Grid container spacing={1.5}>
+        <Grid container spacing={2}>
           {/* Locks */}
-          <Grid size={{ xs: 6 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 1, px: 1.5, backgroundColor: 'action.hover', borderRadius: 1, height: 38 }}>
-              <Typography variant="body2" color="text.secondary">Viterbi</Typography>
+          <Grid item xs={6}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 1.5, bg: 'action.hover', borderRadius: 1 }}>
+              <Typography variant="body2" color="text.secondary">Viterbi Lock</Typography>
               <Chip
                 icon={viterbi_lock ? <LockIcon fontSize="small" /> : <LockOpenIcon fontSize="small" />}
                 label={viterbi_lock ? "LOCKED" : "UNLOCKED"}
                 color={viterbi_lock ? "success" : "default"}
                 size="small"
                 variant={viterbi_lock ? "filled" : "outlined"}
-                sx={{ height: 22, '& .MuiChip-label': { px: 1, fontSize: '0.65rem', fontWeight: 'bold' } }}
               />
             </Box>
           </Grid>
-          <Grid size={{ xs: 6 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 1, px: 1.5, backgroundColor: 'action.hover', borderRadius: 1, height: 38 }}>
-              <Typography variant="body2" color="text.secondary">Deframer</Typography>
+          <Grid item xs={6}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 1.5, bg: 'action.hover', borderRadius: 1 }}>
+              <Typography variant="body2" color="text.secondary">Deframer Lock</Typography>
               <Chip
                 icon={deframer_lock ? <LockIcon fontSize="small" /> : <LockOpenIcon fontSize="small" />}
                 label={deframer_lock ? "LOCKED" : "UNLOCKED"}
                 color={deframer_lock ? "success" : "default"}
                 size="small"
                 variant={deframer_lock ? "filled" : "outlined"}
-                sx={{ height: 22, '& .MuiChip-label': { px: 1, fontSize: '0.65rem', fontWeight: 'bold' } }}
               />
             </Box>
           </Grid>
 
-          {/* Equalized 3-Column Metrics Grid */}
-          <Grid size={{ xs: 4 }}>
-            <Box sx={{ p: 1, borderRadius: 1, border: '1px solid', borderColor: 'divider', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>SNR (Live)</Typography>
-              <Typography variant="h6" color={`${getSnrColor(snr)}.main`} sx={{ fontWeight: 'bold', fontFamily: 'monospace', mt: 0.5, lineHeight: 1.1 }}>
-                {snr.toFixed(1)} <span style={{ fontSize: '0.75rem', fontWeight: 'normal' }}>dB</span>
-              </Typography>
-              <LinearProgress 
-                variant="determinate" 
-                value={Math.min(100, Math.max(0, (snr / 16) * 100))} 
-                color={getSnrColor(snr)} 
-                sx={{ height: 4, borderRadius: 2, mt: 1, backgroundColor: 'action.selected' }} 
-              />
-            </Box>
+          {/* SNR Metrics */}
+          <Grid item xs={6}>
+            <Typography variant="caption" color="text.secondary">SNR (Live)</Typography>
+            <Typography variant="h4" color={`${getSnrColor(snr)}.main`} sx={{ fontWeight: 'bold', mt: 0.5 }}>
+              {snr.toFixed(1)} <Typography component="span" variant="body1">dB</Typography>
+            </Typography>
+            <LinearProgress 
+              variant="determinate" 
+              value={Math.min(100, Math.max(0, (snr / 16) * 100))} 
+              color={getSnrColor(snr)} 
+              sx={{ height: 6, borderRadius: 3, mt: 1, backgroundColor: 'action.selected' }} 
+            />
           </Grid>
 
-          <Grid size={{ xs: 4 }}>
-            <Box sx={{ p: 1, borderRadius: 1, border: '1px solid', borderColor: 'divider', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>Peak SNR</Typography>
-              <Typography variant="h6" sx={{ fontWeight: 'bold', fontFamily: 'monospace', mt: 0.5, color: 'text.primary', lineHeight: 1.1 }}>
-                {peak_snr.toFixed(1)} <span style={{ fontSize: '0.75rem', fontWeight: 'normal' }}>dB</span>
-              </Typography>
-              <Box sx={{ height: 4, mt: 1 }} />
-            </Box>
+          <Grid item xs={6}>
+            <Typography variant="caption" color="text.secondary">Peak SNR</Typography>
+            <Typography variant="h5" sx={{ fontWeight: 'bold', mt: 0.5, color: 'text.primary' }}>
+              {peak_snr.toFixed(1)} <Typography component="span" variant="body2">dB</Typography>
+            </Typography>
           </Grid>
 
-          <Grid size={{ xs: 4 }}>
-            <Box sx={{ p: 1, borderRadius: 1, border: '1px solid', borderColor: 'divider', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>BER</Typography>
-              <Typography variant="h6" sx={{ fontWeight: 'bold', fontFamily: 'monospace', mt: 0.5, color: ber > 0.05 ? 'warning.main' : 'text.primary', fontSize: '0.75rem', lineHeight: 1.1, wordBreak: 'break-all' }}>
-                {ber.toExponential(2)}
-              </Typography>
-              <Box sx={{ height: 4, mt: 1 }} />
-            </Box>
+          {/* Frequency & Error Stats */}
+          <Grid item xs={6}>
+            <Typography variant="caption" color="text.secondary">Carrier Frequency Offset</Typography>
+            <Typography variant="body1" sx={{ fontFamily: 'monospace', mt: 0.5, color: 'info.main' }}>
+              {freq_offset > 0 ? `+${freq_offset.toFixed(1)}` : freq_offset.toFixed(1)} Hz
+            </Typography>
           </Grid>
 
-          {/* Carrier Frequency Offset and RS errors */}
-          <Grid size={{ xs: 6 }}>
-            <Box sx={{ p: 1, borderRadius: 1, backgroundColor: 'action.hover', display: 'flex', flexDirection: 'column', height: '100%' }}>
-              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>Freq Offset</Typography>
-              <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 'bold', mt: 0.5, color: 'info.main' }}>
-                {freq_offset > 0 ? `+${freq_offset.toFixed(1)}` : freq_offset.toFixed(1)} Hz
-              </Typography>
-            </Box>
+          <Grid item xs={6}>
+            <Typography variant="caption" color="text.secondary">Bit Error Rate (BER)</Typography>
+            <Typography variant="body1" sx={{ fontFamily: 'monospace', mt: 0.5, color: ber > 0.05 ? 'warning.main' : 'text.primary' }}>
+              {ber.toExponential(3)}
+            </Typography>
           </Grid>
 
-          <Grid size={{ xs: 6 }}>
-            <Box sx={{ p: 1, borderRadius: 1, backgroundColor: 'action.hover', display: 'flex', flexDirection: 'column', height: '100%' }}>
-              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>RS Corrections</Typography>
-              <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 'bold', mt: 0.5, color: rs_errors > 0 ? 'warning.main' : 'success.main' }}>
-                {rs_errors} avg/pkt
+          <Grid item xs={12}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mt: 1, p: 1, borderRadius: 1, border: '1px solid', borderColor: 'divider', backgroundColor: 'action.hover' }}>
+              <ErrorOutlineIcon sx={{ mr: 1, color: rs_errors > 0 ? 'warning.main' : 'success.main' }} fontSize="small" />
+              <Typography variant="caption" color="text.secondary">
+                Reed-Solomon Frame Corrections: <strong style={{ color: rs_errors > 0 ? '#ffb74d' : '#81c784' }}>{rs_errors} avg/pkt</strong>
               </Typography>
             </Box>
           </Grid>
