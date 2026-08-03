@@ -7,6 +7,7 @@ import ImageCanvas from './ImageCanvas.jsx';
 import { useSelector } from 'react-redux';
 import { Satellite as SatelliteIcon, Terminal as TerminalIcon } from '@mui/icons-material';
 import { getFlattenedTasks } from '../scheduler/session-utils.js';
+import SpectrumVisualizer from './SpectrumVisualizer.jsx';
 
 // Color enhancement filters for canvas overlay
 const COLOR_PALETTES = {
@@ -32,6 +33,17 @@ export default function WeatherViewer({ decoderId }) {
     });
     return activeObs?.id || null;
   }, [decoderId, observations]);
+
+  // Extract initial SDR config parameters for the spectrum visualizer
+  const { initialFrequency, initialGain, sampleRate } = React.useMemo(() => {
+    const activeObs = observations.find((obs) => obs.id === resolvedDecoderId);
+    const sdrConfig = activeObs?.sessions?.[0]?.sdr || {};
+    return {
+      initialFrequency: sdrConfig.frequency_hz || sdrConfig.center_frequency || 1692.14e6,
+      initialGain: sdrConfig.gain || 49,
+      sampleRate: sdrConfig.sample_rate || 2.048e6
+    };
+  }, [resolvedDecoderId, observations]);
 
   const [signalData, setSignalData] = useState({
     snr: 0.0,
@@ -230,8 +242,8 @@ export default function WeatherViewer({ decoderId }) {
 
         </Grid>
 
-        {/* Right column: Main Image Canvas */}
-        <Grid item xs={12} md={8} lg={8.5} sx={{ height: '100%', display: 'flex' }}>
+        {/* Right column: Main Image Canvas & FFT Spectrum */}
+        <Grid item xs={12} md={8} lg={8.5} sx={{ height: '100%', display: 'flex', flexDirection: 'column', gap: 3 }}>
           <Paper
             sx={{
               flex: 1,
@@ -241,7 +253,7 @@ export default function WeatherViewer({ decoderId }) {
               borderColor: 'divider',
               borderRadius: 3,
               overflow: 'hidden',
-              height: '100%'
+              height: '60%'
             }}
           >
             <ImageCanvas 
@@ -249,6 +261,14 @@ export default function WeatherViewer({ decoderId }) {
               filterStyle={COLOR_PALETTES[selectedPalette].filter} 
             />
           </Paper>
+
+          {/* Real-time spectrum & waterfall visualization */}
+          <SpectrumVisualizer 
+            decoderId={resolvedDecoderId} 
+            initialFrequency={initialFrequency} 
+            initialGain={initialGain} 
+            sampleRate={sampleRate} 
+          />
         </Grid>
 
       </Grid>

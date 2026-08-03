@@ -82,6 +82,9 @@ def map_sdr_config_to_args(sdr_config: Dict[str, Any]) -> list[str]:
     return args
 
 
+from weather.rtltcpproxy import RTLTCPProxy
+from weather.websocket import emit_weather_event
+
 async def start_live_decoder(
     decoder_id: str,
     pipeline_id: str,
@@ -148,6 +151,52 @@ async def start_live_decoder(
     http_port = find_free_port()
     http_addr = f"127.0.0.1:{http_port}"
 
+    # Check if SDR is rtltcp to spin up local proxy for real-time FFT/waterfall stream
+    sdr_type = sdr_config.get("type", "rtlsdrusbv3")
+    if isinstance(sdr_type, str):
+        sdr_type = sdr_type.lower()
+    else:
+        sdr_type = getattr(sdr_type, "value", "rtlsdrusbv3").lower()
+
+    connection_type = sdr_config.get("connection_type")
+    if not connection_type:
+        if "tcp" in sdr_type:
+            connection_type = "tcp"
+        else:
+            connection_type = "usb"
+
+    proxy = None
+    if "rtlsdr" in sdr_type and connection_type == "tcp":
+        remote_host = sdr_config.get("host", "127.0.0.1")
+        remote_port = sdr_config.get("port", 1234)
+        logger.info(f"Initializing RTL-TCP Proxy for {remote_host}:{remote_port}")
+        proxy = RTLTCPProxy(remote_host, remote_port)
+        
+        # Define callback to emit FFT data over socket.io
+        def fft_callback(fft_data):
+            asyncio.create_task(
+                emit_weather_event(
+                    "weather_fft",
+                    {
+                        "decoder_id": decoder_id,
+                        "fft": fft_data.tolist()
+                    }
+                )
+            )
+        proxy.fft_callback = fft_callback
+        
+        try:
+            proxy_port = await proxy.start()
+            # Override target config for SatDump command mapping
+            sdr_config = {
+                **sdr_config,
+                "host": "127.0.0.1",
+                "port": proxy_port
+            }
+        except Exception as proxy_err:
+            logger.error(f"Failed to start RTL-TCP proxy: {proxy_err}")
+            proxy = None
+
     # Build command line arguments
     # satdump live <pipeline> <out_dir> --source <src> [args] --samplerate <sr> --frequency <freq> --http_server <addr>
     cmd = [
@@ -202,6 +251,7 @@ async def start_live_decoder(
             "stdout_task": asyncio.create_task(_log_output(decoder_id, process.stdout, "stdout")),
             "stderr_task": asyncio.create_task(_log_output(decoder_id, process.stderr, "stderr")),
             "logs": [],
+            "proxy": proxy,
         }
 
         logger.info(f"SatDump process started in process group with PID {process.pid} on HTTP port {http_port}")
@@ -209,6 +259,8 @@ async def start_live_decoder(
 
     except Exception as e:
         logger.error(f"Failed to launch SatDump live decoder: {e}")
+        if proxy:
+            await proxy.stop()
         return None
 
 
@@ -218,6 +270,13 @@ async def stop_live_decoder(decoder_id: str) -> bool:
     if not proc_info:
         logger.warning(f"No active decoder found for ID {decoder_id}")
         return False
+
+    # Stop proxy if active
+    if "proxy" in proc_info and proc_info["proxy"]:
+        try:
+            await proc_info["proxy"].stop()
+        except Exception as proxy_err:
+            logger.error(f"Error stopping proxy for decoder {decoder_id}: {proxy_err}")
 
     process = proc_info["process"]
     pgid = process.pid

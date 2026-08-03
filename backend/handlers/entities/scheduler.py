@@ -734,6 +734,47 @@ async def get_weather_logs(
     return {"success": True, "data": logs}
 
 
+async def configure_weather_fft(
+    sio: Any, data: Optional[Dict], logger: Any, sid: str
+) -> Dict[str, Any]:
+    """
+    Adjust configuration of the active weather decoder's RTL-TCP proxy (FFT size, FPS, Gain, Frequency).
+    """
+    if not data or not isinstance(data, dict):
+        return {"success": False, "error": "Invalid payload"}
+
+    decoder_id = data.get("decoder_id")
+    if not decoder_id:
+        return {"success": False, "error": "decoder_id is required"}
+
+    from weather.manager import active_processes
+    proc_info = active_processes.get(decoder_id)
+    if not proc_info:
+        return {"success": False, "error": "No active weather decoder process found"}
+
+    proxy = proc_info.get("proxy")
+    if not proxy:
+        return {"success": False, "error": "No active RTL-TCP proxy for this decoder session"}
+
+    fft_size = data.get("fft_size")
+    fft_fps = data.get("fft_fps")
+    gain = data.get("gain")
+    frequency_hz = data.get("frequency_hz")
+
+    if fft_size is not None:
+        proxy.fft_size = int(fft_size)
+        logger.info(f"Weather FFT size updated to {fft_size} for decoder {decoder_id}")
+    if fft_fps is not None:
+        proxy.fft_fps = int(fft_fps)
+        logger.info(f"Weather FFT FPS updated to {fft_fps} for decoder {decoder_id}")
+    if gain is not None:
+        proxy.set_gain(int(gain))
+    if frequency_hz is not None:
+        proxy.set_frequency(int(frequency_hz))
+
+    return {"success": True}
+
+
 def register_handlers(registry):
     """Register scheduler handlers with the command registry."""
     registry.register_batch(
@@ -747,6 +788,7 @@ def register_handlers(registry):
             "cancel-observation": (cancel_observation, "api_call"),
             "trigger-instant-weather-decode": (trigger_instant_weather_decode, "api_call"),
             "get-weather-logs": (get_weather_logs, "api_call"),
+            "configure-weather-fft": (configure_weather_fft, "api_call"),
             # Monitored satellites
             "get-monitored-satellites": (get_monitored_satellites, "api_call"),
             "create-monitored-satellite": (create_monitored_satellite, "api_call"),
