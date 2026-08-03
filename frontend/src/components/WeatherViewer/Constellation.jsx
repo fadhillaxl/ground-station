@@ -71,19 +71,21 @@ export default function Constellation({ points = [] }) {
   }, [points]);
 
   return (
-    <Card sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, flexShrink: 0 }}>
-      <CardContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        <Typography variant="h6" color="primary" sx={{ display: 'flex', alignItems: 'center', mb: 2, fontWeight: 'bold', alignSelf: 'flex-start', width: '100%' }}>
-          <GpsFixedIcon sx={{ mr: 1 }} /> Constellation Diagram (I/Q)
+    <Card sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 3, height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: 'background.paper' }}>
+      <CardContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', p: 2, pb: '16px !important', height: '100%', flex: 1 }}>
+        <Typography variant="subtitle2" color="primary" sx={{ display: 'flex', alignItems: 'center', mb: 1.5, fontWeight: 'bold', alignSelf: 'flex-start', width: '100%' }}>
+          <GpsFixedIcon sx={{ mr: 1, fontSize: '1.1rem' }} /> Constellation Diagram (I/Q)
         </Typography>
 
-        <Box sx={{ position: 'relative', border: '1px solid', borderColor: 'divider', borderRadius: 2, overflow: 'hidden' }}>
-          <canvas
-            ref={canvasRef}
-            width={280}
-            height={280}
-            style={{ display: 'block', backgroundColor: '#0f0f15' }}
-          />
+        <Box sx={{ flex: 1, width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 0 }}>
+          <Box sx={{ position: 'relative', border: '1px solid', borderColor: 'divider', borderRadius: 2, overflow: 'hidden', width: '100%', height: '100%', maxWidth: '240px', maxHeight: '240px', aspectRatio: '1/1' }}>
+            <canvas
+              ref={canvasRef}
+              width={240}
+              height={240}
+              style={{ display: 'block', width: '100%', height: '100%', backgroundColor: '#0f0f15' }}
+            />
+          </Box>
         </Box>
       </CardContent>
     </Card>

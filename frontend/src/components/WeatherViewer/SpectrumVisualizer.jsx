@@ -261,7 +261,7 @@ export default function SpectrumVisualizer({ decoderId, initialFrequency = 1692.
         display: 'flex', 
         flexDirection: 'column', 
         gap: 2,
-        height: 300,
+        height: 320,
         flexShrink: 0
       }}
     >
@@ -274,10 +274,87 @@ export default function SpectrumVisualizer({ decoderId, initialFrequency = 1692.
         </Typography>
       </Box>
 
+      {/* Dedicated Control Bar Toolbar */}
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, alignItems: 'center', p: 1, px: 2, borderRadius: 2, backgroundColor: 'action.hover', border: '1px solid', borderColor: 'divider', mb: 0.5 }}>
+        {/* Fine Tuning offset */}
+        <Box sx={{ flex: '1 1 200px', minWidth: 160 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+            <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 'bold', fontSize: '0.7rem' }}>Fine Tuning Offset</Typography>
+            <Typography variant="caption" sx={{ color: '#00f3ff', fontWeight: 'bold', fontFamily: 'monospace', fontSize: '0.7rem' }}>
+              {freqOffset > 0 ? '+' : ''}{(freqOffset / 1e3).toFixed(1)} kHz
+            </Typography>
+          </Box>
+          <Slider
+            size="small"
+            value={freqOffset}
+            min={-150000}
+            max={150000}
+            step={100}
+            onChange={handleOffsetChange}
+            valueLabelFormat={(v) => `${v > 0 ? '+' : ''}${v / 1000}kHz`}
+            valueLabelDisplay="auto"
+            sx={{ color: '#00f3ff', py: 0.5 }}
+          />
+        </Box>
+
+        {/* Gain slider */}
+        <Box sx={{ flex: '1 1 180px', minWidth: 140 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+            <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 'bold', fontSize: '0.7rem' }}>SDR Hardware Gain</Typography>
+            <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 'bold', fontFamily: 'monospace', fontSize: '0.7rem' }}>{gain} dB</Typography>
+          </Box>
+          <Slider
+            size="small"
+            value={gain}
+            min={0}
+            max={50}
+            step={1}
+            onChange={handleGainChange}
+            valueLabelDisplay="auto"
+            sx={{ py: 0.5 }}
+          />
+        </Box>
+
+        {/* FFT Options */}
+        <Box sx={{ display: 'flex', gap: 1.5, flex: '0 0 auto', minWidth: 260 }}>
+          <FormControl size="small" sx={{ minWidth: 120 }}>
+            <InputLabel id="fft-size-label" sx={{ fontSize: '0.75rem' }}>FFT Resolution</InputLabel>
+            <Select
+              labelId="fft-size-label"
+              value={fftSize}
+              label="FFT Resolution"
+              onChange={handleFftSizeChange}
+              sx={{ height: 32, fontSize: '0.75rem' }}
+            >
+              <MenuItem value={512} sx={{ fontSize: '0.75rem' }}>512 Bins</MenuItem>
+              <MenuItem value={1024} sx={{ fontSize: '0.75rem' }}>1024 Bins</MenuItem>
+              <MenuItem value={2048} sx={{ fontSize: '0.75rem' }}>2048 Bins</MenuItem>
+            </Select>
+          </FormControl>
+
+          <FormControl size="small" sx={{ minWidth: 120 }}>
+            <InputLabel id="fft-fps-label" sx={{ fontSize: '0.75rem' }}>FPS Rate</InputLabel>
+            <Select
+              labelId="fft-fps-label"
+              value={fftFps}
+              label="FPS Rate"
+              onChange={handleFftFpsChange}
+              sx={{ height: 32, fontSize: '0.75rem' }}
+            >
+              <MenuItem value={5} sx={{ fontSize: '0.75rem' }}>5 FPS</MenuItem>
+              <MenuItem value={10} sx={{ fontSize: '0.75rem' }}>10 FPS</MenuItem>
+              <MenuItem value={15} sx={{ fontSize: '0.75rem' }}>15 FPS (Default)</MenuItem>
+              <MenuItem value={30} sx={{ fontSize: '0.75rem' }}>30 FPS</MenuItem>
+            </Select>
+          </FormControl>
+        </Box>
+      </Box>
+
+      {/* Charts Grid */}
       <Grid container spacing={2} sx={{ flexGrow: 1, minHeight: 0 }}>
         {/* Spectrum Canvas */}
         <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex', flexDirection: 'column' }}>
-          <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5 }}>FFT RF Spectrum</Typography>
+          <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5, fontSize: '0.7rem' }}>FFT RF Spectrum</Typography>
           <Box sx={{ flexGrow: 1, backgroundColor: '#0a0a0c', borderRadius: 2, overflow: 'hidden', border: '1px solid #1c1c1f', minHeight: 100 }}>
             <canvas 
               ref={fftCanvasRef} 
@@ -290,7 +367,7 @@ export default function SpectrumVisualizer({ decoderId, initialFrequency = 1692.
 
         {/* Waterfall Canvas */}
         <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex', flexDirection: 'column' }}>
-          <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5 }}>Signal History (Waterfall)</Typography>
+          <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5, fontSize: '0.7rem' }}>Signal History (Waterfall)</Typography>
           <Box sx={{ flexGrow: 1, backgroundColor: '#0a0a0c', borderRadius: 2, overflow: 'hidden', border: '1px solid #1c1c1f', minHeight: 100 }}>
             <canvas 
               ref={waterfallCanvasRef} 
@@ -301,81 +378,6 @@ export default function SpectrumVisualizer({ decoderId, initialFrequency = 1692.
           </Box>
         </Grid>
       </Grid>
-
-      {/* Interactive Controls Row */}
-      <Box sx={{ borderTop: '1px solid', borderColor: 'divider', pt: 1.5 }}>
-        <Grid container spacing={3} alignItems="center">
-          {/* Fine Tuning offset */}
-          <Grid size={{ xs: 12, md: 4 }}>
-            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'flex', justifyContent: 'space-between' }}>
-              <span>Fine Tuning Offset</span>
-              <span style={{ color: '#00f3ff', fontWeight: 'bold' }}>{freqOffset > 0 ? '+' : ''}{(freqOffset / 1e3).toFixed(1)} kHz</span>
-            </Typography>
-            <Slider
-              size="small"
-              value={freqOffset}
-              min={-150000}
-              max={150000}
-              step={100}
-              onChange={handleOffsetChange}
-              valueLabelFormat={(v) => `${v > 0 ? '+' : ''}${v / 1000}kHz`}
-              valueLabelDisplay="auto"
-              sx={{ color: '#00f3ff' }}
-            />
-          </Grid>
-
-          {/* Gain slider */}
-          <Grid size={{ xs: 12, md: 4 }}>
-            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'flex', justifyContent: 'space-between' }}>
-              <span>SDR Hardware Gain</span>
-              <span style={{ color: 'primary.main', fontWeight: 'bold' }}>{gain} dB</span>
-            </Typography>
-            <Slider
-              size="small"
-              value={gain}
-              min={0}
-              max={50}
-              step={1}
-              onChange={handleGainChange}
-              valueLabelDisplay="auto"
-            />
-          </Grid>
-
-          {/* FFT Options */}
-          <Grid size={{ xs: 12, md: 4 }}>
-            <Stack direction="row" spacing={2}>
-              <FormControl fullWidth size="small">
-                <InputLabel id="fft-size-label">FFT Resolution</InputLabel>
-                <Select
-                  labelId="fft-size-label"
-                  value={fftSize}
-                  label="FFT Resolution"
-                  onChange={handleFftSizeChange}
-                >
-                  <MenuItem value={512}>512 Bins</MenuItem>
-                  <MenuItem value={1024}>1024 Bins</MenuItem>
-                  <MenuItem value={2048}>2048 Bins</MenuItem>
-                </Select>
-              </FormControl>
-
-              <FormControl fullWidth size="small">
-                <InputLabel id="fft-fps-label">FPS Rate</InputLabel>
-                <Select
-                  labelId="fft-fps-label"
-                  value={fftFps}
-                  label="FPS Rate"
-                  onChange={handleFftFpsChange}
-                >
-                  <MenuItem value={5}>5 FPS</MenuItem>
-                  <MenuItem value={10}>10 FPS</MenuItem>
-                  <MenuItem value={15}>15 FPS (Default)</MenuItem>
-                  <MenuItem value={30}>30 FPS</MenuItem>
-                </Select>
-              </FormControl>
-            </Stack>
-          </Grid>
-        </Grid>
-      </Box>
     </Paper>
   );
 }

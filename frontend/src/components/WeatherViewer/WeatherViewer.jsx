@@ -9,6 +9,62 @@ import { Satellite as SatelliteIcon, Terminal as TerminalIcon } from '@mui/icons
 import { getFlattenedTasks } from '../scheduler/session-utils.js';
 import SpectrumVisualizer from './SpectrumVisualizer.jsx';
 
+// ANSI Escape Code parser to React colored spans
+function parseAnsiToReact(text) {
+  if (!text) return '';
+  const ansiRegex = /[\u001b\x1b]?\[([0-9;]*)m/g;
+  const parts = [];
+  let match;
+  let lastIndex = 0;
+  let currentStyle = {};
+
+  const colorMap = {
+    30: '#282c34', // Black
+    31: '#ff5d6c', // Red
+    32: '#59d98b', // Green
+    33: '#ffcc66', // Yellow
+    34: '#4f9dff', // Blue
+    35: '#b388ff', // Magenta
+    36: '#00f3ff', // Cyan
+    37: '#f0f0f0', // White
+  };
+
+  while ((match = ansiRegex.exec(text)) !== null) {
+    const plainText = text.substring(lastIndex, match.index);
+    if (plainText) {
+      parts.push(
+        <span key={lastIndex} style={{ ...currentStyle }}>
+          {plainText}
+        </span>
+      );
+    }
+
+    const codes = match[1].split(';');
+    for (const code of codes) {
+      const c = parseInt(code, 10);
+      if (c === 0 || !code) {
+        currentStyle = {}; // Reset
+      } else if (c === 1) {
+        currentStyle.fontWeight = 'bold';
+      } else if (c >= 30 && c <= 37) {
+        currentStyle.color = colorMap[c];
+      }
+    }
+    lastIndex = ansiRegex.lastIndex;
+  }
+
+  const remainingText = text.substring(lastIndex);
+  if (remainingText) {
+    parts.push(
+      <span key={lastIndex} style={{ ...currentStyle }}>
+        {remainingText}
+      </span>
+    );
+  }
+
+  return parts.length > 0 ? parts : text;
+}
+
 // Color enhancement filters for canvas overlay
 const COLOR_PALETTES = {
   default: { name: 'Normal (Visible)', filter: 'none' },
@@ -143,17 +199,14 @@ export default function WeatherViewer({ decoderId }) {
       <Grid container spacing={3} sx={{ height: '100%', flex: 1 }}>
         
         {/* Left column: Diagnostics & Controls */}
-        <Grid size={{ xs: 12, md: 4, lg: 3.5 }} sx={{ display: 'flex', flexDirection: 'column', gap: 3, height: '100%', overflowY: 'auto' }}>
+        <Grid size={{ xs: 12, md: 4, lg: 3.5 }} sx={{ display: 'flex', flexDirection: 'column', gap: 3, height: '100%', overflowY: 'hidden' }}>
           
           {/* Signal Quality Panel */}
           <SignalInfo signalData={signalData} />
 
-          {/* Constellation Diagram */}
-          <Constellation points={signalData.constellation} />
-
           {/* Image Enhancements */}
-          <Paper sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2, flexShrink: 0 }}>
-            <Typography variant="subtitle1" color="primary" sx={{ fontWeight: 'bold', mb: 2 }}>
+          <Paper sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2, flexShrink: 0, backgroundColor: 'background.paper' }}>
+            <Typography variant="subtitle2" color="primary" sx={{ fontWeight: 'bold', mb: 2 }}>
               Enhancement Palettes
             </Typography>
             <FormControl fullWidth size="small">
@@ -182,7 +235,8 @@ export default function WeatherViewer({ decoderId }) {
               flexDirection: 'column',
               backgroundColor: '#0c0c0d',
               color: '#f0f0f0',
-              flexShrink: 0
+              flex: 1,
+              minHeight: 200
             }}
           >
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
@@ -204,7 +258,8 @@ export default function WeatherViewer({ decoderId }) {
             <Box 
               ref={consoleRef}
               sx={{ 
-                height: 200, 
+                flex: 1,
+                minHeight: 0,
                 overflowY: 'auto', 
                 fontFamily: 'monospace', 
                 fontSize: '0.70rem', 
@@ -233,7 +288,7 @@ export default function WeatherViewer({ decoderId }) {
                     <span style={{ color: '#666', marginRight: 8 }}>
                       {log.timestamp ? new Date(log.timestamp * 1000).toLocaleTimeString() : ''}
                     </span>
-                    {log.message}
+                    {parseAnsiToReact(log.message)}
                   </Box>
                 ))
               )}
@@ -244,23 +299,30 @@ export default function WeatherViewer({ decoderId }) {
 
         {/* Right column: Main Image Canvas & FFT Spectrum */}
         <Grid size={{ xs: 12, md: 8, lg: 8.5 }} sx={{ height: '100%', display: 'flex', flexDirection: 'column', gap: 3 }}>
-          <Paper
-            sx={{
-              flex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              border: '1px solid',
-              borderColor: 'divider',
-              borderRadius: 3,
-              overflow: 'hidden',
-              height: '60%'
-            }}
-          >
-            <ImageCanvas 
-              imageUpdate={imageUpdate} 
-              filterStyle={COLOR_PALETTES[selectedPalette].filter} 
-            />
-          </Paper>
+          {/* Side-by-Side Image Canvas and Constellation Diagram */}
+          <Box sx={{ display: 'flex', gap: 3, height: '60%', minHeight: 0, flexShrink: 1 }}>
+            <Paper
+              sx={{
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 3,
+                overflow: 'hidden',
+                height: '100%',
+                backgroundColor: 'background.paper'
+              }}
+            >
+              <ImageCanvas 
+                imageUpdate={imageUpdate} 
+                filterStyle={COLOR_PALETTES[selectedPalette].filter} 
+              />
+            </Paper>
+            <Box sx={{ width: 280, flexShrink: 0, display: 'flex', flexDirection: 'column', height: '100%' }}>
+              <Constellation points={signalData.constellation} />
+            </Box>
+          </Box>
 
           {/* Real-time spectrum & waterfall visualization */}
           <SpectrumVisualizer 
