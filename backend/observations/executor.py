@@ -640,7 +640,7 @@ class ObservationExecutor:
 
                 elif task_type == "weather_decoder":
                     pipeline_id = task_config.get("pipeline_id", "gk2a_lrit")
-                    output_dir = task_config.get("output_dir", f"decoded/{observation_id}")
+                    output_dir = task_config.get("output_dir", "decoded")
                     
                     from weather.manager import start_live_decoder
                     from weather.satdumpbridge import start_bridge_task

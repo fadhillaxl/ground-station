@@ -385,7 +385,7 @@ async def trigger_instant_weather_decode(
 
         task_config = {
             "pipeline_id": pipeline_id,
-            "output_dir": f"decoded/{pipeline_id}_{obs_id[:8]}",
+            "output_dir": "decoded",
         }
         if custom_freq is not None:
             task_config["frequency_hz"] = float(custom_freq)
