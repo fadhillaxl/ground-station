@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Grid,
@@ -8,69 +10,116 @@ import {
   Stack,
   Divider,
   Button,
+  ButtonGroup,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
   TextField,
   Tooltip,
+  IconButton,
+  Alert,
 } from '@mui/material';
 import VideocamIcon from '@mui/icons-material/Videocam';
 import SecurityIcon from '@mui/icons-material/Security';
-import MemoryIcon from '@mui/icons-material/Memory';
-import HighQualityIcon from '@mui/icons-material/HighQuality';
-import RouterIcon from '@mui/icons-material/Router';
+import GridViewIcon from '@mui/icons-material/GridView';
+import ViewModuleIcon from '@mui/icons-material/ViewModule';
+import ViewComfyIcon from '@mui/icons-material/ViewComfy';
+import CropSquareIcon from '@mui/icons-material/CropSquare';
 import SettingsIcon from '@mui/icons-material/Settings';
+import AddIcon from '@mui/icons-material/Add';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import HlsPlayer from './hls-player.jsx';
+import { useSocket } from '../common/socket.jsx';
+import { fetchCameras, submitOrEditCamera, setOpenAddDialog } from '../hardware/camera-slice.jsx';
 
 export default function CctvPage() {
-  const [streamUrl, setStreamUrl] = useState(() => {
-    return localStorage.getItem('groundstation_cctv_stream_url') || '/cctv/index.m3u8';
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const { socket } = useSocket();
+
+  const camerasList = useSelector((state) => state.cameras?.list || []);
+  const loading = useSelector((state) => state.cameras?.loading || false);
+
+  const [layoutMode, setLayoutMode] = useState('auto'); // 'auto', '1x1', '2x2', '3x3'
+  const [selectedCamId, setSelectedCamId] = useState(null);
+
+  // Local state for Quick Add Camera dialog
+  const [openQuickAdd, setOpenQuickAdd] = useState(false);
+  const [newCam, setNewCam] = useState({
+    name: '',
+    url: '/cctv/index.m3u8',
+    type: 'hls',
+    status: 'active',
   });
 
-  const [cameraName, setCameraName] = useState(() => {
-    return localStorage.getItem('groundstation_cctv_camera_name') || 'Main Entrance';
-  });
-
-  const [openSettings, setOpenSettings] = useState(false);
-  const [tempUrl, setTempUrl] = useState(streamUrl);
-  const [tempName, setTempName] = useState(cameraName);
-
   useEffect(() => {
-    setTempUrl(streamUrl);
-  }, [streamUrl]);
+    if (socket) {
+      dispatch(fetchCameras({ socket }));
+    }
+  }, [dispatch, socket]);
 
-  useEffect(() => {
-    setTempName(cameraName);
-  }, [cameraName]);
+  // Filter active cameras or fallback to default
+  const activeCameras = camerasList.length > 0
+    ? camerasList
+    : [
+        {
+          id: 'default-1',
+          name: localStorage.getItem('groundstation_cctv_camera_name') || 'Main Entrance',
+          url: localStorage.getItem('groundstation_cctv_stream_url') || '/cctv/index.m3u8',
+          type: 'hls',
+          status: 'active',
+        },
+      ];
 
-  const handleSaveSettings = (e) => {
+  // Determine displayed cameras based on focus mode or layout
+  const displayedCameras = selectedCamId
+    ? activeCameras.filter((c) => String(c.id) === String(selectedCamId))
+    : activeCameras;
+
+  // Grid column calculation
+  const getGridItemSize = () => {
+    if (selectedCamId || layoutMode === '1x1') return { xs: 12 };
+    if (layoutMode === '2x2') return { xs: 12, md: 6 };
+    if (layoutMode === '3x3') return { xs: 12, sm: 6, md: 4 };
+
+    // Auto mode calculation
+    const count = activeCameras.length;
+    if (count <= 1) return { xs: 12 };
+    if (count <= 4) return { xs: 12, md: 6 };
+    return { xs: 12, sm: 6, md: 4 };
+  };
+
+  const handleSaveNewCamera = (e) => {
     e.preventDefault();
-    const finalUrl = tempUrl.trim() || '/cctv/index.m3u8';
-    const finalName = tempName.trim() || 'Main Entrance';
-
-    setStreamUrl(finalUrl);
-    setCameraName(finalName);
-
-    localStorage.setItem('groundstation_cctv_stream_url', finalUrl);
-    localStorage.setItem('groundstation_cctv_camera_name', finalName);
-
-    setOpenSettings(false);
+    if (!newCam.name || !newCam.url) return;
+    dispatch(submitOrEditCamera({ socket, formValues: newCam }));
+    setOpenQuickAdd(false);
+    setNewCam({ name: '', url: '/cctv/index.m3u8', type: 'hls', status: 'active' });
   };
 
   return (
     <Box sx={{ flexGrow: 1, p: { xs: 2, md: 3 }, minHeight: 'calc(100vh - 120px)' }}>
       {/* Header Section */}
-      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2 }}>
+      <Box
+        sx={{
+          mb: 3,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 2,
+        }}
+      >
         <Box>
           <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 0.5 }}>
             <VideocamIcon sx={{ fontSize: 32, color: 'primary.main' }} />
             <Typography variant="h4" fontWeight="bold" sx={{ color: 'text.primary' }}>
-              CCTV Live Monitoring
+              CCTV NVR Live Monitoring
             </Typography>
             <Chip
               icon={<SecurityIcon sx={{ fontSize: '1rem !important' }} />}
-              label="Hikvision Security"
+              label={`${activeCameras.length} Camera Feed${activeCameras.length > 1 ? 's' : ''}`}
               size="small"
               color="primary"
               variant="outlined"
@@ -78,29 +127,162 @@ export default function CctvPage() {
             />
           </Stack>
           <Typography variant="body2" color="text.secondary">
-            Real-time video feed from the ground station facility Hikvision camera stream.
+            Multi-channel live security camera matrix & stream visualizer.
           </Typography>
         </Box>
 
-        <Button
-          variant="outlined"
-          color="primary"
-          startIcon={<SettingsIcon />}
-          onClick={() => setOpenSettings(true)}
-          sx={{ fontWeight: 'bold' }}
-        >
-          Configure Stream / IP
-        </Button>
+        {/* NVR Control Toolbar */}
+        <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
+          {selectedCamId && (
+            <Button
+              variant="outlined"
+              color="secondary"
+              size="small"
+              onClick={() => setSelectedCamId(null)}
+              sx={{ fontWeight: 'bold' }}
+            >
+              Show All Streams
+            </Button>
+          )}
+
+          {/* Grid Layout Selector */}
+          <ButtonGroup size="small" variant="outlined" sx={{ bgcolor: 'background.paper' }}>
+            <Tooltip title="Single View (1x1)">
+              <Button
+                variant={layoutMode === '1x1' ? 'contained' : 'outlined'}
+                onClick={() => {
+                  setLayoutMode('1x1');
+                  setSelectedCamId(null);
+                }}
+              >
+                <CropSquareIcon fontSize="small" />
+              </Button>
+            </Tooltip>
+            <Tooltip title="2x2 Grid (4 Feeds)">
+              <Button
+                variant={layoutMode === '2x2' ? 'contained' : 'outlined'}
+                onClick={() => {
+                  setLayoutMode('2x2');
+                  setSelectedCamId(null);
+                }}
+              >
+                <ViewModuleIcon fontSize="small" />
+              </Button>
+            </Tooltip>
+            <Tooltip title="3x3 Grid (9 Feeds)">
+              <Button
+                variant={layoutMode === '3x3' ? 'contained' : 'outlined'}
+                onClick={() => {
+                  setLayoutMode('3x3');
+                  setSelectedCamId(null);
+                }}
+              >
+                <ViewComfyIcon fontSize="small" />
+              </Button>
+            </Tooltip>
+            <Tooltip title="Auto Grid">
+              <Button
+                variant={layoutMode === 'auto' ? 'contained' : 'outlined'}
+                onClick={() => {
+                  setLayoutMode('auto');
+                  setSelectedCamId(null);
+                }}
+              >
+                <GridViewIcon fontSize="small" />
+              </Button>
+            </Tooltip>
+          </ButtonGroup>
+
+          <Button
+            variant="contained"
+            color="primary"
+            size="small"
+            startIcon={<AddIcon />}
+            onClick={() => setOpenQuickAdd(true)}
+            sx={{ fontWeight: 'bold' }}
+          >
+            Add Camera
+          </Button>
+
+          <Tooltip title="Manage Cameras in System Hardware Settings">
+            <IconButton
+              size="small"
+              onClick={() => navigate('/admin/system/hardware/cameras')}
+              sx={{ color: 'text.secondary', border: '1px solid', borderColor: 'divider' }}
+            >
+              <SettingsIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Stack>
       </Box>
 
+      {/* Fallback Banner if no custom cameras added */}
+      {camerasList.length === 0 && (
+        <Alert
+          severity="info"
+          action={
+            <Button
+              color="inherit"
+              size="small"
+              endIcon={<OpenInNewIcon fontSize="small" />}
+              onClick={() => navigate('/admin/system/hardware/cameras')}
+              sx={{ fontWeight: 'bold' }}
+            >
+              Hardware Settings
+            </Button>
+          }
+          sx={{ mb: 3 }}
+        >
+          Showing default system camera. You can configure multiple RTSP / IP camera streams in <strong>Hardware Settings</strong>.
+        </Alert>
+      )}
+
       {/* Main Grid Layout */}
-      <Grid container spacing={3}>
-        {/* Main CCTV Stream View */}
+      <Grid container spacing={2.5}>
+        {/* Streams Grid Area */}
         <Grid size={{ xs: 12, lg: 9 }}>
-          <HlsPlayer src={streamUrl} cameraName={cameraName} />
+          <Grid container spacing={2}>
+            {displayedCameras.map((cam) => (
+              <Grid size={getGridItemSize()} key={cam.id || cam.url}>
+                <Box
+                  sx={{
+                    position: 'relative',
+                    cursor: selectedCamId ? 'default' : 'pointer',
+                    '&:hover .camera-focus-btn': { opacity: 1 },
+                  }}
+                >
+                  <HlsPlayer src={cam.url} cameraName={cam.name} />
+
+                  {!selectedCamId && displayedCameras.length > 1 && (
+                    <Button
+                      className="camera-focus-btn"
+                      variant="contained"
+                      size="small"
+                      onClick={() => setSelectedCamId(cam.id)}
+                      sx={{
+                        position: 'absolute',
+                        bottom: 48,
+                        right: 12,
+                        opacity: 0.6,
+                        transition: 'opacity 0.2s',
+                        fontSize: '0.7rem',
+                        py: 0.25,
+                        px: 1,
+                        backgroundColor: 'rgba(0,0,0,0.85)',
+                        backdropFilter: 'blur(4px)',
+                        zIndex: 4,
+                      }}
+                    >
+                      Focus
+                    </Button>
+                  )}
+                </Box>
+              </Grid>
+            ))}
+          </Grid>
         </Grid>
 
-        {/* Sidebar Stream Information & Status */}
+        {/* Sidebar Stream Matrix Information & Management */}
         <Grid size={{ xs: 12, lg: 3 }}>
           <Paper
             elevation={2}
@@ -118,120 +300,123 @@ export default function CctvPage() {
           >
             <Stack direction="row" justifyContent="space-between" alignItems="center">
               <Typography variant="subtitle1" fontWeight="bold" color="primary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <SecurityIcon fontSize="small" /> Camera Metadata
+                <SecurityIcon fontSize="small" /> NVR Channel Matrix
               </Typography>
-              <Tooltip title="Configure Stream URL">
-                <Button size="small" onClick={() => setOpenSettings(true)} sx={{ minWidth: 'auto', p: 0.5 }}>
-                  <SettingsIcon fontSize="small" />
-                </Button>
-              </Tooltip>
+              <Button
+                size="small"
+                onClick={() => navigate('/admin/system/hardware/cameras')}
+                sx={{ fontSize: '0.75rem' }}
+              >
+                Manage
+              </Button>
             </Stack>
 
             <Divider />
 
-            <Stack spacing={2}>
-              <Box>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-                  Camera Name
-                </Typography>
-                <Typography variant="body2" fontWeight="600" color="text.primary">
-                  {cameraName}
-                </Typography>
-              </Box>
+            <Typography variant="caption" color="text.secondary">
+              Select a camera channel to focus or switch streams:
+            </Typography>
 
-              <Box>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-                  Stream Endpoint / IP
-                </Typography>
-                <Typography
-                  variant="caption"
-                  sx={{
-                    fontFamily: 'monospace',
-                    color: '#00f3ff',
-                    backgroundColor: 'action.hover',
-                    p: 0.75,
-                    borderRadius: 1,
-                    display: 'block',
-                    wordBreak: 'break-all',
-                    border: '1px solid',
-                    borderColor: 'divider',
-                  }}
-                >
-                  {streamUrl}
-                </Typography>
-              </Box>
+            <Stack spacing={1} sx={{ maxHeight: 350, overflowY: 'auto', pr: 0.5 }}>
+              {activeCameras.map((cam, idx) => {
+                const isFocused = String(cam.id) === String(selectedCamId);
+                return (
+                  <Paper
+                    key={cam.id || idx}
+                    variant="outlined"
+                    onClick={() => setSelectedCamId(isFocused ? null : cam.id)}
+                    sx={{
+                      p: 1.25,
+                      borderRadius: 1.5,
+                      cursor: 'pointer',
+                      borderColor: isFocused ? 'primary.main' : 'divider',
+                      backgroundColor: isFocused ? 'action.selected' : 'background.default',
+                      transition: 'all 0.15s ease',
+                      '&:hover': {
+                        borderColor: 'primary.light',
+                        backgroundColor: 'action.hover',
+                      },
+                    }}
+                  >
+                    <Stack direction="row" justifyContent="space-between" alignItems="center">
+                      <Box sx={{ overflow: 'hidden' }}>
+                        <Typography variant="body2" fontWeight="600" noWrap color="text.primary">
+                          CH {idx + 1}: {cam.name}
+                        </Typography>
+                        <Typography
+                          variant="caption"
+                          noWrap
+                          sx={{
+                            fontFamily: 'monospace',
+                            color: '#00f3ff',
+                            display: 'block',
+                            fontSize: '0.7rem',
+                          }}
+                        >
+                          {cam.url}
+                        </Typography>
+                      </Box>
 
-              <Box>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-                  Transcoder Engine
-                </Typography>
-                <Chip
-                  icon={<RouterIcon fontSize="small" />}
-                  label="FFmpeg HLS Pipeline"
-                  size="small"
-                  sx={{ backgroundColor: 'action.selected', color: 'text.primary', fontWeight: 500 }}
-                />
-              </Box>
-
-              <Divider />
-
-              <Stack spacing={1.5}>
-                <Stack direction="row" alignItems="center" justifyContent="space-between">
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                    <HighQualityIcon fontSize="small" /> Video Codec
-                  </Typography>
-                  <Typography variant="caption" fontWeight="600" color="text.primary">
-                    H.264 / AAC
-                  </Typography>
-                </Stack>
-
-                <Stack direction="row" alignItems="center" justifyContent="space-between">
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                    <MemoryIcon fontSize="small" /> Latency Mode
-                  </Typography>
-                  <Typography variant="caption" fontWeight="600" color="success.main">
-                    Low Latency HLS
-                  </Typography>
-                </Stack>
-              </Stack>
+                      <Chip
+                        label={String(cam.type || 'HLS').toUpperCase()}
+                        size="small"
+                        color={isFocused ? 'primary' : 'default'}
+                        sx={{ height: 20, fontSize: '0.65rem' }}
+                      />
+                    </Stack>
+                  </Paper>
+                );
+              })}
             </Stack>
+
+            <Divider />
+
+            <Button
+              variant="outlined"
+              fullWidth
+              startIcon={<AddIcon />}
+              onClick={() => setOpenQuickAdd(true)}
+              size="small"
+            >
+              Add Camera Feed
+            </Button>
           </Paper>
         </Grid>
       </Grid>
 
-      {/* Stream Settings Dialog */}
-      <Dialog open={openSettings} onClose={() => setOpenSettings(false)} maxWidth="sm" fullWidth>
-        <form onSubmit={handleSaveSettings}>
-          <DialogTitle sx={{ fontWeight: 'bold' }}>Configure CCTV Camera Stream</DialogTitle>
+      {/* Quick Add Camera Dialog */}
+      <Dialog open={openQuickAdd} onClose={() => setOpenQuickAdd(false)} maxWidth="sm" fullWidth>
+        <form onSubmit={handleSaveNewCamera}>
+          <DialogTitle sx={{ fontWeight: 'bold' }}>Add Camera Stream</DialogTitle>
           <DialogContent dividers>
-            <Stack spacing={2.5} sx={{ pt: 1 }}>
+            <Stack spacing= {2.5} sx={{ pt: 1 }}>
               <TextField
-                label="Camera Name"
-                value={tempName}
-                onChange={(e) => setTempName(e.target.value)}
+                label="Camera Label"
+                value={newCam.name}
+                onChange={(e) => setNewCam({ ...newCam, name: e.target.value })}
                 fullWidth
                 required
-                placeholder="e.g. Main Entrance"
-                helperText="Display name overlay on top of the CCTV feed"
+                placeholder="e.g. South Gate Camera"
+                helperText="Name displayed on the camera grid"
               />
 
               <TextField
-                label="Camera Stream URL / IP Endpoint"
-                value={tempUrl}
-                onChange={(e) => setTempUrl(e.target.value)}
+                label="Stream URL / RTSP HLS Endpoint"
+                value={newCam.url}
+                onChange={(e) => setNewCam({ ...newCam, url: e.target.value })}
                 fullWidth
                 required
                 placeholder="/cctv/index.m3u8 or http://192.168.1.100:8080/index.m3u8"
-                helperText="Relative or absolute HLS stream URL generated from your camera RTSP/IP server"
+                helperText="Relative URL (/cctv/index.m3u8) or full http stream URL"
               />
             </Stack>
           </DialogContent>
           <DialogActions sx={{ p: 2 }}>
-            <Button onClick={() => setOpenSettings(false)} color="inherit">
+            <Button onClick={() => setOpenQuickAdd(false)} color="inherit">
               Cancel
             </Button>
             <Button type="submit" variant="contained" color="primary">
-              Save Settings
+              Add Camera
             </Button>
           </DialogActions>
         </form>

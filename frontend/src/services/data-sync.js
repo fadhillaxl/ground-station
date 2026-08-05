@@ -24,6 +24,7 @@ import { fetchLocationForUserId } from '../components/settings/location-slice.js
 import { fetchRigs } from '../components/hardware/rig-slice.jsx';
 import { fetchRotators } from '../components/hardware/rotator-slice.jsx';
 import { fetchSDRs } from '../components/hardware/sdr-slice.jsx';
+import { fetchCameras } from '../components/hardware/camera-slice.jsx';
 import { fetchOrbitalSources } from '../components/satellites/sources-slice.jsx';
 import { fetchSatelliteGroups } from '../components/satellites/groups-slice.jsx';
 import { getTrackingStateFromBackend, getTargetMapSettings } from '../components/target/target-slice.jsx';
@@ -74,6 +75,7 @@ export async function initializeAppData(socket) {
         { name: 'rigs', run: () => store.dispatch(fetchRigs({ socket })) },
         { name: 'rotators', run: () => store.dispatch(fetchRotators({ socket })) },
         { name: 'sdrs', run: () => store.dispatch(fetchSDRs({ socket })) },
+        { name: 'cameras', run: () => store.dispatch(fetchCameras({ socket })) },
         { name: 'orbital_sources', run: () => store.dispatch(fetchOrbitalSources({ socket })) },
         { name: 'satellite_groups', run: () => store.dispatch(fetchSatelliteGroups({ socket })) },
         {
