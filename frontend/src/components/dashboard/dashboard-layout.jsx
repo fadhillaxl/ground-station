@@ -568,7 +568,6 @@ function CustomAppTitle() {
                                 },
                             }}>
                                 <Stack direction="row" spacing={1} alignItems="center">
-                                    <VersionInfo minimal={true}/>
                                     <UpdateIndicator />
                                 </Stack>
                             </Box>

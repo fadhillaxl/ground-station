@@ -218,7 +218,6 @@ const ADMIN_SYSTEM_TABS = [
     { key: "users", labelKey: "tabs.users", defaultLabel: "Users", path: "/admin/system/users" },
     { key: "hardware", labelKey: "tabs.hardware", defaultLabel: "Hardware", path: "/admin/system/hardware/sdrs" },
     { key: "maintenance", labelKey: "tabs.maintenance", defaultLabel: "Maintenance", path: "/admin/system/maintenance" },
-    { key: "about", labelKey: "tabs.about", defaultLabel: "About", path: "/admin/system/about" },
 ];
 
 const ADMIN_SATELLITES_TABS = [

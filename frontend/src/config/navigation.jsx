@@ -411,11 +411,6 @@ export const getNavigation = ({ isAdmin = false } = {}) => {
             title: i18n.t('maintenance', { ns: 'navigation' }),
             icon: <EngineeringIcon/>,
         },
-        {
-            segment: 'admin/system/about',
-            title: i18n.t('about', { ns: 'navigation' }),
-            icon: <InfoIcon/>,
-        },
     ];
 
     if (!isAdmin) {
