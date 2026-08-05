@@ -51,6 +51,7 @@ import FileBrowserMain from "./components/filebrowser/filebrowser-main.jsx";
 import ScheduledObservationsLayout from "./components/scheduler/main-layout.jsx";
 import CelestialMainLayout from "./components/celestial/main-layout.jsx";
 import WeatherViewer from "./components/WeatherViewer/WeatherViewer.jsx";
+import CctvPage from "./components/cctv/cctv-page.jsx";
 
 function WeatherViewerRoute() {
     const { decoderId } = useParams();
@@ -82,6 +83,10 @@ const router = createBrowserRouter([
                     {
                         path: "earthview",
                         Component: EarthViewLayout,
+                    },
+                    {
+                        path: "cctv",
+                        Component: CctvPage,
                     },
                     {
                         path: "tracking",

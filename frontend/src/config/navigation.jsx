@@ -18,6 +18,7 @@
  */
 
 import PublicIcon from '@mui/icons-material/Public';
+import VideocamIcon from '@mui/icons-material/Videocam';
 import GpsFixedIcon from '@mui/icons-material/GpsFixed';
 import EngineeringIcon from '@mui/icons-material/Engineering';
 import {Satellite03Icon} from "hugeicons-react";
@@ -325,6 +326,11 @@ export const getNavigation = ({ isAdmin = false } = {}) => {
             segment: 'earthview',
             title: i18n.t('earthview', { ns: 'navigation', defaultValue: 'Earth view' }),
             icon: <EarthViewIconWithStatus />,
+        },
+        {
+            segment: 'cctv',
+            title: i18n.t('cctv', { ns: 'navigation', defaultValue: 'CCTV' }),
+            icon: <VideocamIcon />,
         },
         {
             segment: 'tracking',
