@@ -19,11 +19,13 @@ import {
   IconButton,
   Tooltip,
 } from '@mui/material';
-import { DataGrid } from '@mui/x-data-grid';
+import { DataGrid, gridClasses } from '@mui/x-data-grid';
+import { alpha } from '@mui/material/styles';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import VideocamIcon from '@mui/icons-material/Videocam';
+import SelectionActionBar from './selection-action-bar.jsx';
 import { useSocket } from '../common/socket.jsx';
 import {
   fetchCameras,
@@ -41,6 +43,8 @@ export default function CameraTable() {
   );
 
   const [selectedIds, setSelectedIds] = useState([]);
+  const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
+
   const [formData, setFormData] = useState({
     id: null,
     name: '',
@@ -85,6 +89,15 @@ export default function CameraTable() {
     dispatch(setOpenAddDialog(true));
   };
 
+  const handleEditSelected = () => {
+    if (selectedIds.length === 1) {
+      const selectedCam = cameras.find((c) => String(c.id) === String(selectedIds[0]));
+      if (selectedCam) {
+        handleOpenEdit(selectedCam);
+      }
+    }
+  };
+
   const handleCloseDialog = () => {
     dispatch(setOpenAddDialog(false));
   };
@@ -95,12 +108,11 @@ export default function CameraTable() {
     dispatch(submitOrEditCamera({ socket, formValues: formData }));
   };
 
-  const handleDeleteSelected = () => {
+  const handleConfirmDelete = () => {
     if (selectedIds.length === 0) return;
-    if (window.confirm(`Are you sure you want to delete ${selectedIds.length} camera(s)?`)) {
-      dispatch(deleteCameras({ socket, selectedIds }));
-      setSelectedIds([]);
-    }
+    dispatch(deleteCameras({ socket, selectedIds }));
+    setSelectedIds([]);
+    setOpenDeleteDialog(false);
   };
 
   const columns = [
@@ -161,56 +173,73 @@ export default function CameraTable() {
 
   return (
     <Paper elevation={3} sx={{ p: 2, borderRadius: 0, bgcolor: 'background.paper' }}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
         <Typography variant="h6" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
           <VideocamIcon color="primary" /> IP Camera & CCTV Streams
         </Typography>
-        <Stack direction="row" spacing={1}>
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<AddIcon />}
-            onClick={handleOpenAdd}
-            size="small"
-          >
-            Add Camera
-          </Button>
-          {selectedIds.length > 0 && (
-            <Button
-              variant="outlined"
-              color="error"
-              startIcon={<DeleteIcon />}
-              onClick={handleDeleteSelected}
-              size="small"
-            >
-              Delete ({selectedIds.length})
-            </Button>
-          )}
-        </Stack>
       </Stack>
 
-      <Box sx={{ height: 400, width: '100%' }}>
+      <Box sx={{ height: 420, width: '100%' }}>
         <DataGrid
           rows={cameras}
           columns={columns}
           loading={loading}
           checkboxSelection
           onRowSelectionModelChange={(newSelection) => setSelectedIds(newSelection)}
+          onRowDoubleClick={(params) => handleOpenEdit(params.row)}
           density="comfortable"
           pageSizeOptions={[5, 10, 25]}
           initialState={{
             pagination: { paginationModel: { pageSize: 10 } },
           }}
           sx={{
-            border: '1px solid',
-            borderColor: 'divider',
-            '& .MuiDataGrid-cell': {
-              display: 'flex',
-              alignItems: 'center',
+            border: 0,
+            marginTop: 1,
+            [`& .${gridClasses.cell}:focus, & .${gridClasses.cell}:focus-within`]: {
+              outline: 'none',
+            },
+            [`& .${gridClasses.columnHeader}:focus, & .${gridClasses.columnHeader}:focus-within`]: {
+              outline: 'none',
+            },
+            '& .MuiDataGrid-columnHeaders': {
+              backgroundColor: (theme) =>
+                alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.18 : 0.10),
+              borderBottom: (theme) => `2px solid ${alpha(theme.palette.primary.main, 0.45)}`,
             },
           }}
         />
       </Box>
+
+      {/* Selection Action Bar for ADD, EDIT, DELETE */}
+      <SelectionActionBar
+        selectedCount={selectedIds.length}
+        onClearSelection={() => setSelectedIds([])}
+        primaryActions={
+          <>
+            <Button variant="contained" color="primary" startIcon={<AddIcon />} onClick={handleOpenAdd}>
+              ADD
+            </Button>
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<EditIcon />}
+              disabled={selectedIds.length !== 1}
+              onClick={handleEditSelected}
+            >
+              EDIT
+            </Button>
+            <Button
+              variant="contained"
+              color="error"
+              startIcon={<DeleteIcon />}
+              disabled={selectedIds.length === 0}
+              onClick={() => setOpenDeleteDialog(true)}
+            >
+              DELETE
+            </Button>
+          </>
+        }
+      />
 
       {/* Add / Edit Camera Dialog */}
       <Dialog open={openAddDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
@@ -276,6 +305,24 @@ export default function CameraTable() {
             </Button>
           </DialogActions>
         </form>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={openDeleteDialog} onClose={() => setOpenDeleteDialog(false)}>
+        <DialogTitle sx={{ fontWeight: 'bold' }}>Delete Camera(s)</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body1">
+            Are you sure you want to delete {selectedIds.length} camera(s)? This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={() => setOpenDeleteDialog(false)} color="inherit">
+            Cancel
+          </Button>
+          <Button onClick={handleConfirmDelete} variant="contained" color="error">
+            Delete
+          </Button>
+        </DialogActions>
       </Dialog>
     </Paper>
   );
