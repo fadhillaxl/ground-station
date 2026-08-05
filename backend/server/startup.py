@@ -644,6 +644,7 @@ snapshots_dir = os.path.join(backend_dir, "..", "data", "snapshots")
 decoded_dir = os.path.join(backend_dir, "..", "data", "decoded")
 audio_dir = os.path.join(backend_dir, "..", "data", "audio")
 transcriptions_dir = os.path.join(backend_dir, "..", "data", "transcriptions")
+cctv_dir = os.path.join(backend_dir, "..", "data", "cctv")
 
 # Create directories if they don't exist
 os.makedirs(satellites_dir, exist_ok=True)
@@ -654,6 +655,7 @@ os.makedirs(snapshots_dir, exist_ok=True)
 os.makedirs(decoded_dir, exist_ok=True)
 os.makedirs(audio_dir, exist_ok=True)
 os.makedirs(transcriptions_dir, exist_ok=True)
+os.makedirs(cctv_dir, exist_ok=True)
 
 # Use html=True to enable directory browsing
 app.mount("/satimages", StaticFiles(directory=satellites_dir, html=True), name="satimages")
@@ -671,6 +673,7 @@ app.mount(
 )
 app.mount("/body-icons", StaticFiles(directory=bodies_dir, html=True), name="body-icons")
 app.mount("/mission-icons", StaticFiles(directory=missions_dir, html=True), name="mission-icons")
+app.mount("/cctv", StaticFiles(directory=cctv_dir, html=False), name="cctv")
 
 
 # Add the version API endpoint BEFORE the catch-all route
