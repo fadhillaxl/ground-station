@@ -19,6 +19,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import CameraAltIcon from '@mui/icons-material/CameraAlt';
 import VideocamIcon from '@mui/icons-material/Videocam';
 import VideocamOffIcon from '@mui/icons-material/VideocamOff';
+import { resolveUrl } from '../../utils/url.js';
 
 export default function HlsPlayer({
   src = '/cctv/index.m3u8',
@@ -67,9 +68,11 @@ export default function HlsPlayer({
     const video = videoRef.current;
     if (!video) return;
 
+    const targetUrl = resolveUrl(src);
+
     // Standard native HLS support (e.g., Safari iOS/macOS)
     if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      video.src = src;
+      video.src = targetUrl;
       video.muted = true;
       video
         .play()
@@ -99,7 +102,7 @@ export default function HlsPlayer({
       });
       hlsRef.current = hls;
 
-      hls.loadSource(src);
+      hls.loadSource(targetUrl);
       hls.attachMedia(video);
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
