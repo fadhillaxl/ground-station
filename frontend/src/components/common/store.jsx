@@ -24,6 +24,7 @@ import { persistStore, persistReducer } from "redux-persist";
 import storageEngine from "redux-persist/lib/storage";
 import rigsReducer from '../hardware/rig-slice.jsx';
 import rotatorsReducer from '../hardware/rotator-slice.jsx';
+import camerasReducer from '../hardware/camera-slice.jsx';
 import orbitalSourcesReducer from '../satellites/sources-slice.jsx';
 import satellitesReducer from '../satellites/satellite-slice.jsx';
 import satelliteGroupReducer from '../satellites/groups-slice.jsx';
@@ -430,6 +431,7 @@ export const store = configureStore({
         vfo: persistedVfoReducer,
         rigs: persistedRigsReducer,
         rotators: persistedRotatorsReducer,
+        cameras: camerasReducer,
         tleSources: persistedOrbitalSourcesReducer,
         satellites: persistedSatellitesReducer,
         satelliteGroups: persistedSatelliteGroupsReducer,

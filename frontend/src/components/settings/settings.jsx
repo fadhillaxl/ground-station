@@ -32,7 +32,8 @@ import Tabs, { tabsClasses } from '@mui/material/Tabs';
 import {gridLayoutStoreName as earthViewGridLayoutName} from '../earthview/main-layout.jsx';
 import {gridLayoutStoreName as targetGridLayoutName} from '../target/main-layout.jsx';
 import Grid from "@mui/material/Grid";
-import AntennaRotatorTable from "../hardware/rotator-table.jsx";
+import AntennaRotatorTable from '../hardware/rotator-table.jsx';
+import CameraTable from '../hardware/camera-table.jsx';
 import RigTable from "../hardware/rig-table.jsx";
 import {styled} from "@mui/material/styles";
 import SourcesTable from "../satellites/sources-table.jsx";
@@ -557,9 +558,10 @@ const AdminSystemHardwareTabs = React.memo(function AdminSystemHardwareTabs() {
     const navigate = useNavigate();
 
     const resolveHardwareTabFromPath = React.useCallback((pathname) => {
+        if (pathname === "/admin/system/hardware/cameras") return "cameras";
         if (pathname === "/admin/system/hardware/rotators") return "rotators";
         if (pathname === "/admin/system/hardware/sdrs") return "sdrs";
-        return "rigs";
+        return "sdrs";
     }, []);
 
     const [activeTab, setActiveTab] = React.useState(() => resolveHardwareTabFromPath(location.pathname));
@@ -577,15 +579,18 @@ const AdminSystemHardwareTabs = React.memo(function AdminSystemHardwareTabs() {
 
     let content = null;
     switch (activeTab) {
+        case "cameras":
+            content = <CameraTable />;
+            break;
         case "rotators":
             content = <RotatorControlForm />;
             break;
-        case "sdrs":
-            content = <SDRsPage />;
-            break;
         case "rigs":
-        default:
             content = <RigControlForm />;
+            break;
+        case "sdrs":
+        default:
+            content = <SDRsPage />;
             break;
     }
 
@@ -603,6 +608,7 @@ const AdminSystemHardwareTabs = React.memo(function AdminSystemHardwareTabs() {
                 <AntTab key="sdrs" value="sdrs" label={t('tabs.sdrs')} />
                 <AntTab key="rigs" value="rigs" label={t('tabs.rigs')} />
                 <AntTab key="rotators" value="rotators" label={t('tabs.rotators')} />
+                <AntTab key="cameras" value="cameras" label={t('tabs.cameras', { defaultValue: 'Cameras' })} />
             </AntTabs>
             {content}
         </Box>

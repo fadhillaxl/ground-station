@@ -239,6 +239,10 @@ const router = createBrowserRouter([
                                                 path: "sdrs",
                                                 Component: AdminSystemHardwarePage,
                                             },
+                                            {
+                                                path: "cameras",
+                                                Component: AdminSystemHardwarePage,
+                                            },
                                         ],
                                     },
                                     {
