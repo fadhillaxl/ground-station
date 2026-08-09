@@ -1130,7 +1130,7 @@ async def delete_camera(
 
         cameras = await crud.hardware.fetch_cameras(dbsession)
         return {
-            "success": (cameras["success"] & delete_reply["success"]),
+            "success": bool(cameras.get("success", False)) and bool(delete_reply.get("success", False)),
             "data": cameras.get("data", []),
         }
 

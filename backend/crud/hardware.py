@@ -232,11 +232,14 @@ async def delete_rotators(
             for rotator_id in rotator_ids
         ]
 
-        stmt = delete(Rotators).where(Rotators.id.in_(rotator_ids)).returning(Rotators)
+        stmt = select(Rotators).filter(Rotators.id.in_(rotator_ids))
         result = await session.execute(stmt)
-        deleted = result.scalars().all()
-        if not deleted:
+        rotators = result.scalars().all()
+        if not rotators:
             return {"success": False, "error": "No rotators with the provided IDs were found."}
+
+        stmt = delete(Rotators).where(Rotators.id.in_(rotator_ids))
+        await session.execute(stmt)
         await session.commit()
         return {"success": True, "data": None, "error": None}
 
@@ -417,11 +420,14 @@ async def delete_rig(
             rig_ids = rig_ids.get("ids", [])
         rig_ids = [uuid.UUID(rig_id) if isinstance(rig_id, str) else rig_id for rig_id in rig_ids]
 
-        stmt = delete(Rigs).where(Rigs.id.in_(rig_ids)).returning(Rigs)
+        stmt = select(Rigs).filter(Rigs.id.in_(rig_ids))
         result = await session.execute(stmt)
-        deleted = result.scalars().all()
-        if not deleted:
+        rigs = result.scalars().all()
+        if not rigs:
             return {"success": False, "error": "No rigs with the provided IDs were found."}
+
+        stmt = delete(Rigs).where(Rigs.id.in_(rig_ids))
+        await session.execute(stmt)
         await session.commit()
         return {"success": True, "data": None, "error": None}
 
@@ -543,16 +549,40 @@ async def delete_cameras(
     Delete multiple camera records by their UUIDs or string representations of UUIDs.
     """
     try:
-        camera_ids = [
-            uuid.UUID(camera_id) if isinstance(camera_id, str) else camera_id
-            for camera_id in camera_ids
-        ]
+        if isinstance(camera_ids, dict):
+            if "ids" in camera_ids:
+                camera_ids = camera_ids["ids"]
+            elif "id" in camera_ids:
+                camera_ids = [camera_ids["id"]]
+            else:
+                camera_ids = list(camera_ids.values())
+        elif isinstance(camera_ids, (str, uuid.UUID)):
+            camera_ids = [camera_ids]
 
-        stmt = delete(Cameras).where(Cameras.id.in_(camera_ids)).returning(Cameras)
+        parsed_ids = []
+        for item in camera_ids:
+            if isinstance(item, dict) and "id" in item:
+                item = item["id"]
+            if isinstance(item, str):
+                try:
+                    parsed_ids.append(uuid.UUID(item))
+                except ValueError:
+                    continue
+            elif isinstance(item, uuid.UUID):
+                parsed_ids.append(item)
+
+        if not parsed_ids:
+            return {"success": False, "error": "No valid camera IDs provided."}
+
+        stmt = select(Cameras).filter(Cameras.id.in_(parsed_ids))
         result = await session.execute(stmt)
-        deleted = result.scalars().all()
-        if not deleted:
+        cameras = result.scalars().all()
+
+        if not cameras:
             return {"success": False, "error": "No cameras with the provided IDs were found."}
+
+        stmt = delete(Cameras).where(Cameras.id.in_(parsed_ids))
+        await session.execute(stmt)
         await session.commit()
         return {"success": True, "data": None, "error": None}
 

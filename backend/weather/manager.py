@@ -147,6 +147,11 @@ async def start_live_decoder(
     
     resolved_output.mkdir(parents=True, exist_ok=True)
 
+    # Ensure directory size is within limit before decoding and start background cleaner
+    from weather.cleaner import cleanup_weather_folder, start_cleaner_task, stop_cleaner_task
+    cleanup_weather_folder(resolved_output)
+    await start_cleaner_task(decoder_id, resolved_output)
+
     # Find free port for HTTP Server monitoring
     http_port = find_free_port()
     http_addr = f"127.0.0.1:{http_port}"
@@ -305,6 +310,13 @@ async def stop_live_decoder(decoder_id: str) -> bool:
             await process.wait()
     except Exception as e:
         logger.error(f"Error terminating process group {pgid}: {e}")
+
+    # Stop cleaner task
+    try:
+        from weather.cleaner import stop_cleaner_task
+        await stop_cleaner_task(decoder_id)
+    except Exception as cleaner_err:
+        logger.error(f"Error stopping cleaner task for decoder {decoder_id}: {cleaner_err}")
 
     # Cancel logger tasks
     proc_info["stdout_task"].cancel()
