@@ -36,6 +36,7 @@ from . import (
     sessions,
     setup,
     systeminfo,
+    telemetry,
     tracking,
     transmitters,
     vfo,
@@ -60,4 +61,6 @@ __all__ = [
     "sessions",
     "celestial",
     "control",
+    "telemetry",
 ]
+

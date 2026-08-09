@@ -297,13 +297,16 @@ class StripSubpathMiddleware:
         await self.app(scope, receive, send)
 
 
+from handlers.entities.telemetry import router as telemetry_router, set_telemetry_socketio
+
+app.include_router(telemetry_router)
+set_telemetry_socketio(sio)
+
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 app.add_middleware(StripSubpathMiddleware)
 
 raw_socket_app = socketio.ASGIApp(sio, other_asgi_app=app)
 socket_app = StripSubpathMiddleware(raw_socket_app)
-
-
 
 process_manager.set_sio(sio)
 

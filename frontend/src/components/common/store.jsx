@@ -54,6 +54,7 @@ import celestialReducer, { CELESTIAL_PASSES_DEFAULTS_VERSION } from '../celestia
 import celestialMonitoredReducer from '../celestial/monitored-slice.jsx';
 import celestialDisplayReducer from '../celestial/celestial-display-slice.jsx';
 import authReducer from '../auth/auth-slice.jsx';
+import telemetryReducer from '../telemetry/telemetry-slice.jsx';
 import backendSyncMiddleware from '../waterfall/vfo-marker/vfo-middleware.jsx';
 
 const storage = storageEngine?.default ?? storageEngine;
@@ -458,6 +459,7 @@ export const store = configureStore({
         celestialMonitored: persistedCelestialMonitoredReducer,
         celestialDisplay: persistedCelestialDisplayReducer,
         auth: persistedAuthReducer,
+        telemetry: telemetryReducer,
     },
     devTools: process.env.NODE_ENV !== "production",
     middleware: (getDefaultMiddleware) =>

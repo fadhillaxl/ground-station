@@ -52,6 +52,7 @@ import ScheduledObservationsLayout from "./components/scheduler/main-layout.jsx"
 import CelestialMainLayout from "./components/celestial/main-layout.jsx";
 import WeatherViewer from "./components/WeatherViewer/WeatherViewer.jsx";
 import CctvPage from "./components/cctv/cctv-page.jsx";
+import TelemetryPage from "./components/telemetry/telemetry-page.jsx";
 
 function WeatherViewerRoute() {
     const { decoderId } = useParams();
@@ -87,6 +88,14 @@ const router = createBrowserRouter([
                     {
                         path: "cctv",
                         Component: CctvPage,
+                    },
+                    {
+                        path: "telemetry",
+                        Component: TelemetryPage,
+                    },
+                    {
+                        path: "ttc",
+                        element: <Navigate to="/telemetry" replace />,
                     },
                     {
                         path: "tracking",
