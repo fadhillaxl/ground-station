@@ -787,3 +787,21 @@ class AuthSessions(Base):
         default=datetime.now(timezone.utc),
         onupdate=datetime.now(timezone.utc),
     )
+
+
+class SatelliteTelemetry(Base):
+    __tablename__ = "satellite_telemetry"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, nullable=False)
+    satellite_id = Column(String(64), nullable=False, index=True)
+    timestamp = Column(AwareDateTime, nullable=False, default=datetime.now(timezone.utc), index=True)
+    metric_key = Column(String(128), nullable=False, index=True)
+    numeric_value = Column(Float, nullable=False)
+    unit = Column(String(32), nullable=True)
+    raw_payload = Column(JSON, nullable=True)
+
+    __table_args__ = (
+        Index("idx_telemetry_sat_time", "satellite_id", "timestamp"),
+        Index("idx_telemetry_sat_metric_time", "satellite_id", "metric_key", "timestamp"),
+    )
+
