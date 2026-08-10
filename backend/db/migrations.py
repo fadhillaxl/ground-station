@@ -22,12 +22,17 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from sqlalchemy import create_engine
+# Ensure third-party alembic library is imported from site-packages, not shadowed by local alembic/ directory
+_orig_path = sys.path[:]
+if sys.path and (sys.path[0] == '' or sys.path[0] == '.' or sys.path[0].endswith('/backend')):
+    sys.path.append(sys.path.pop(0))
 
 from alembic import command
 from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
+
+sys.path = _orig_path
 
 BACKUP_KEEP_COUNT = 5
 BACKUP_SUFFIX = ".bak"
