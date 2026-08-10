@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { getApiBaseUrl } from '../../utils/url.js';
+import { resolveUrl } from '../../utils/url.js';
 
 export const fetchTelemetryHistory = createAsyncThunk(
   'telemetry/fetchTelemetryHistory',
@@ -12,7 +12,7 @@ export const fetchTelemetryHistory = createAsyncThunk(
       params.append('limit', String(limit));
 
       const response = await fetch(
-        `${getApiBaseUrl()}/api/telemetry/${satelliteId}/history?${params.toString()}`
+        resolveUrl(`/api/telemetry/${satelliteId}/history?${params.toString()}`)
       );
       const data = await response.json();
       if (!data.success) {
@@ -29,7 +29,7 @@ export const fetchLatestTelemetry = createAsyncThunk(
   'telemetry/fetchLatestTelemetry',
   async ({ satelliteId }, { rejectWithValue }) => {
     try {
-      const response = await fetch(`${getApiBaseUrl()}/api/telemetry/${satelliteId}/latest`);
+      const response = await fetch(resolveUrl(`/api/telemetry/${satelliteId}/latest`));
       const data = await response.json();
       if (!data.success) {
         return rejectWithValue(data.error);
@@ -45,7 +45,7 @@ export const importSatnogsSchema = createAsyncThunk(
   'telemetry/importSatnogsSchema',
   async ({ schemaJson }, { rejectWithValue }) => {
     try {
-      const response = await fetch(`${getApiBaseUrl()}/api/telemetry/import-schema`, {
+      const response = await fetch(resolveUrl('/api/telemetry/import-schema'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(schemaJson),

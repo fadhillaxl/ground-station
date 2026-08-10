@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   Box,
-  Grid2 as Grid,
   Paper,
   Typography,
   Select,
@@ -19,6 +18,7 @@ import {
   TextField,
   Alert,
 } from '@mui/material';
+import Grid from '@mui/material/Grid';
 import SatelliteAltIcon from '@mui/icons-material/SatelliteAlt';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
@@ -116,7 +116,7 @@ export default function TelemetryPage() {
         }}
       >
         <Grid container spacing={2} alignItems="center">
-          <Grid size={{ xs: 12, md: 6 }}>
+          <Grid item xs={12} md={6}>
             <Stack direction="row" spacing={1.5} alignItems="center">
               <SatelliteAltIcon sx={{ fontSize: 32, color: '#00e676' }} />
               <Box>
@@ -130,7 +130,7 @@ export default function TelemetryPage() {
             </Stack>
           </Grid>
 
-          <Grid size={{ xs: 12, md: 6 }}>
+          <Grid item xs={12} md={6}>
             <Stack direction="row" spacing={2} justifyContent="flex-end" alignItems="center">
               <FormControl size="small" sx={{ minWidth: 200 }}>
                 <InputLabel id="satellite-select-label">Satellite (SUID/NORAD)</InputLabel>
@@ -181,7 +181,7 @@ export default function TelemetryPage() {
       </Typography>
 
       <Grid container spacing={2} mb={3}>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+        <Grid item xs={12} sm={6} md={3}>
           <MetricCard
             title="AXIS 1 Current"
             value={latestMetrics['sw_ana_axis1_curr']?.value ?? 0.142}
@@ -190,7 +190,7 @@ export default function TelemetryPage() {
             subtitle="ADCS Axis 1 Sensor"
           />
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+        <Grid item xs={12} sm={6} md={3}>
           <MetricCard
             title="AXIS 2 Current"
             value={latestMetrics['sw_ana_axis2_curr']?.value ?? 0.158}
@@ -199,7 +199,7 @@ export default function TelemetryPage() {
             subtitle="ADCS Axis 2 Sensor"
           />
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+        <Grid item xs={12} sm={6} md={3}>
           <MetricCard
             title="AXIS 3 Current"
             value={latestMetrics['sw_ana_axis3_curr']?.value ?? 0.129}
@@ -208,7 +208,7 @@ export default function TelemetryPage() {
             subtitle="ADCS Axis 3 Sensor"
           />
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+        <Grid item xs={12} sm={6} md={3}>
           <MetricCard
             title="Battery Voltage"
             value={latestMetrics['vbat']?.value ?? 8.24}
@@ -221,7 +221,7 @@ export default function TelemetryPage() {
 
       {/* Time-Series Charts */}
       <Grid container spacing={3} mb={3}>
-        <Grid size={{ xs: 12, md: 7 }}>
+        <Grid item xs={12} md={7}>
           <TelemetryChart
             title="AXIS Currents History (ADCS Motors)"
             data={historyMetrics}
@@ -229,7 +229,7 @@ export default function TelemetryPage() {
             height={340}
           />
         </Grid>
-        <Grid size={{ xs: 12, md: 5 }}>
+        <Grid item xs={12} md={5}>
           <TelemetryChart
             title="Subsystem Temperatures (°C)"
             data={historyMetrics}
