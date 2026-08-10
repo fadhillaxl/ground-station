@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List
 from fastapi import APIRouter, Request, HTTPException, Query, Body
 
-from crud import telemetry as crud_telemetry
+import crud.telemetry as crud_telemetry
 from db import AsyncSessionLocal
 from telemetry.schemaparser import evaluate_metric_math, parse_satnogs_grafana_schema
 

@@ -8,3 +8,6 @@ from .satellites import *  # noqa: F401, F403
 from .tlesources import *  # noqa: F401, F403
 from .trackingstate import *  # noqa: F401, F403
 from .transmitters import *  # noqa: F401, F403
+from .telemetry import *  # noqa: F401, F403
+from . import telemetry  # noqa: F401
+
