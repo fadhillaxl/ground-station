@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   Box,
@@ -6,9 +6,15 @@ import {
   Stack,
   Chip,
   CircularProgress,
+  Select,
+  MenuItem,
+  FormControl,
+  IconButton,
+  Tooltip,
   useTheme,
 } from '@mui/material';
 import ShowChartIcon from '@mui/icons-material/ShowChart';
+import TuneIcon from '@mui/icons-material/Tune';
 import { LineChart } from '@mui/x-charts/LineChart';
 import {
   TitleBar,
@@ -17,8 +23,17 @@ import {
 } from '../common/common.jsx';
 import { fetchTelemetryHistory } from './telemetry-slice.jsx';
 
+const FIELD_ALIASES = {
+  sw_ana_bus_v: ['sw_ana_bus_v', 'sw_adcs_analogs_digital_bus_v', 'sw_ana_5p0_v', 'sw_ana_3p3_v', 'sw_ana_2p5_v'],
+  sw_ana_eps_bus_i: ['sw_ana_eps_bus_i', 'sw_ana_3p3_i', 'sw_ana_afire_curr', 'sw_ana_axis1_curr', 'sw_ana_axis2_curr'],
+  sw_ana_bat1_v: ['sw_ana_bat1_v', 'sw_ana_bat_v', 'sw_ana_batt_v', 'sw_ana_5p0_v'],
+  sw_ana_eps_temp: ['sw_ana_eps_temp', 'sw_adcs_analogs_det_temp', 'sw_adcs_analogs_motor1_temp'],
+  sw_ana_cdh_temp: ['sw_ana_cdh_temp', 'sw_adcs_analogs_motor2_temp', 'sw_adcs_analogs_motor3_temp'],
+  sw_ana_sa1_i: ['sw_ana_sa1_i', 'sw_ana_axis1_curr', 'sw_ana_axis2_curr', 'sw_ana_axis3_curr', 'sw_ana_bat1_curr'],
+};
+
 export default function TelemetrySingleChartIsland({
-  field = 'sw_ana_bus_v',
+  field: defaultField = 'sw_ana_bus_v',
   title = 'Bus Voltage',
   unit = 'V',
   color = '#29b6f6',
@@ -32,11 +47,30 @@ export default function TelemetrySingleChartIsland({
     historyTimeRange,
     fieldHistories,
     latestMetrics,
+    rawFrames,
     loadingHistory,
   } = useSelector((state) => state.telemetry);
   const isEditing = useSelector(
     (state) => state.dashboard?.isEditing || state.telemetry?.gridEditable || gridEditable
   );
+
+  const [selectedField, setSelectedField] = useState(defaultField);
+  const [showPicker, setShowPicker] = useState(false);
+
+  // Auto-resolve best matching field from aliases if defaultField not in latestMetrics
+  const resolvedField = useMemo(() => {
+    if (selectedField !== defaultField) return selectedField;
+    if (latestMetrics && selectedField in latestMetrics && latestMetrics[selectedField] !== null) {
+      return selectedField;
+    }
+    const aliases = FIELD_ALIASES[defaultField] || [];
+    for (const alias of aliases) {
+      if (latestMetrics && alias in latestMetrics && latestMetrics[alias] !== null && latestMetrics[alias] !== undefined) {
+        return alias;
+      }
+    }
+    return defaultField;
+  }, [selectedField, defaultField, latestMetrics]);
 
   // Fetch field data when satellite or time range changes
   useEffect(() => {
@@ -44,65 +78,116 @@ export default function TelemetrySingleChartIsland({
     dispatch(
       fetchTelemetryHistory({
         dashboardUid: selectedSatelliteUid,
-        field,
+        field: resolvedField,
         from: historyTimeRange || 'now-2d',
         apiUrl,
       })
     );
-  }, [dispatch, selectedSatelliteUid, field, historyTimeRange, apiUrl]);
+  }, [dispatch, selectedSatelliteUid, resolvedField, historyTimeRange, apiUrl]);
 
-  const rawPoints = fieldHistories?.[field] || [];
+  // Available channel keys for picker dropdown
+  const availableChannels = useMemo(() => {
+    if (!latestMetrics) return [];
+    return Object.keys(latestMetrics)
+      .filter((k) => typeof latestMetrics[k] === 'number' || (!isNaN(Number(latestMetrics[k])) && latestMetrics[k] !== null && latestMetrics[k] !== ''))
+      .sort();
+  }, [latestMetrics]);
 
-  // Downsample points for smooth rendering
+  // Build chart dataset by combining history API points with live rawFrames
   const { chartData, minVal, maxVal, avgVal, latestVal } = useMemo(() => {
-    if (!Array.isArray(rawPoints) || rawPoints.length === 0) {
-      const fallbackVal = latestMetrics?.[field];
+    const rawPoints = fieldHistories?.[resolvedField] || [];
+    const pointsMap = new Map();
+
+    // 1. Ingest InfluxDB history points
+    if (Array.isArray(rawPoints)) {
+      rawPoints.forEach((pt) => {
+        const timeVal = pt.Time || pt.time || pt.timestamp || pt.Timestamp;
+        const val = pt[resolvedField] !== undefined ? pt[resolvedField] : (pt.Value !== undefined ? pt.Value : pt.value);
+        if (timeVal && val !== undefined && val !== null) {
+          const num = Number(val);
+          if (!isNaN(num)) {
+            const timeMs = typeof timeVal === 'number' ? timeVal : new Date(timeVal).getTime();
+            pointsMap.set(timeMs, num);
+          }
+        }
+      });
+    }
+
+    // 2. Ingest live raw frames stream
+    if (Array.isArray(rawFrames)) {
+      rawFrames.forEach((frame) => {
+        const timeVal = frame.timestamp || frame.raw?.Time;
+        const rawObj = frame.raw || frame;
+        const val = rawObj[resolvedField];
+        if (timeVal && val !== undefined && val !== null) {
+          const num = Number(val);
+          if (!isNaN(num)) {
+            const timeMs = typeof timeVal === 'number' ? timeVal : new Date(timeVal).getTime();
+            if (!pointsMap.has(timeMs)) {
+              pointsMap.set(timeMs, num);
+            }
+          }
+        }
+      });
+    }
+
+    // If still empty but latestMetrics has a value, seed an initial point
+    if (pointsMap.size === 0 && latestMetrics?.[resolvedField] !== undefined && latestMetrics?.[resolvedField] !== null) {
+      const num = Number(latestMetrics[resolvedField]);
+      if (!isNaN(num)) {
+        pointsMap.set(Date.now(), num);
+      }
+    }
+
+    // Sort chronologically
+    const sortedEntries = Array.from(pointsMap.entries()).sort((a, b) => a[0] - b[0]);
+    if (sortedEntries.length === 0) {
       return {
         chartData: [],
         minVal: null,
         maxVal: null,
         avgVal: null,
-        latestVal: fallbackVal !== undefined ? Number(fallbackVal) : null,
+        latestVal: latestMetrics?.[resolvedField] ?? null,
       };
     }
 
-    const step = Math.max(1, Math.floor(rawPoints.length / 100));
+    // Downsample to max 80 points for smooth canvas rendering
+    const step = Math.max(1, Math.floor(sortedEntries.length / 80));
     const sampled = [];
     let min = Infinity;
     let max = -Infinity;
     let sum = 0;
     let count = 0;
 
-    for (let i = 0; i < rawPoints.length; i += step) {
-      const pt = rawPoints[i];
-      const timeMs = pt.Time || pt.timestamp;
-      const val = pt[field] !== undefined ? pt[field] : pt.Value;
-      if (timeMs && val !== undefined) {
-        const num = Number(val);
-        if (!isNaN(num)) {
-          sampled.push({
-            time: new Date(timeMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            value: num,
-          });
-          if (num < min) min = num;
-          if (num > max) max = num;
-          sum += num;
-          count++;
-        }
-      }
+    for (let i = 0; i < sortedEntries.length; i += step) {
+      const [tMs, num] = sortedEntries[i];
+      sampled.push({
+        time: new Date(tMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        value: Number(num.toFixed(4)),
+      });
+      if (num < min) min = num;
+      if (num > max) max = num;
+      sum += num;
+      count++;
     }
 
-    const lastPt = rawPoints[rawPoints.length - 1];
-    const lastVal = lastPt?.[field] !== undefined ? lastPt[field] : lastPt?.Value;
+    // Ensure the very last point is always included
+    const [lastTime, lastNum] = sortedEntries[sortedEntries.length - 1];
+    if (sampled.length > 0 && sampled[sampled.length - 1].value !== lastNum) {
+      sampled.push({
+        time: new Date(lastTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        value: Number(lastNum.toFixed(4)),
+      });
+    }
 
     return {
       chartData: sampled,
-      minVal: count > 0 ? min : null,
-      maxVal: count > 0 ? max : null,
+      minVal: count > 0 ? min.toFixed(2) : null,
+      maxVal: count > 0 ? max.toFixed(2) : null,
       avgVal: count > 0 ? (sum / count).toFixed(2) : null,
-      latestVal: lastVal !== undefined ? Number(lastVal) : latestMetrics?.[field],
+      latestVal: lastNum !== undefined ? lastNum : latestMetrics?.[resolvedField],
     };
-  }, [rawPoints, field, latestMetrics]);
+  }, [fieldHistories, resolvedField, rawFrames, latestMetrics]);
 
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
@@ -116,19 +201,23 @@ export default function TelemetrySingleChartIsland({
           pr: 1,
         }}
       >
-        <Stack direction="row" spacing={1} alignItems="center">
-          <ShowChartIcon sx={{ fontSize: 16, color }} />
-          <Typography variant="body2" fontWeight={700} noWrap>
+        <Stack direction="row" spacing={0.8} alignItems="center" sx={{ minWidth: 0 }}>
+          <ShowChartIcon sx={{ fontSize: 16, color, flexShrink: 0 }} />
+          <Typography variant="body2" fontWeight={700} noWrap sx={{ fontSize: '0.82rem' }}>
             {title}
+          </Typography>
+          <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.65rem', display: { xs: 'none', sm: 'inline' } }}>
+            ({resolvedField})
           </Typography>
         </Stack>
 
-        <Stack direction="row" spacing={0.8} alignItems="center">
+        <Stack direction="row" spacing={0.6} alignItems="center">
           {loadingHistory && <CircularProgress size={12} thickness={5} />}
+
           {latestVal !== null && latestVal !== undefined && (
             <Chip
               size="small"
-              label={`Latest: ${latestVal} ${unit}`}
+              label={`${latestVal} ${unit}`}
               sx={{
                 height: 20,
                 fontSize: '0.68rem',
@@ -139,8 +228,41 @@ export default function TelemetrySingleChartIsland({
               }}
             />
           )}
+
+          <Tooltip title="Select Channel">
+            <IconButton
+              size="small"
+              onClick={() => setShowPicker(!showPicker)}
+              sx={{ p: 0.3, color: showPicker ? color : 'text.secondary' }}
+            >
+              <TuneIcon sx={{ fontSize: 14 }} />
+            </IconButton>
+          </Tooltip>
         </Stack>
       </TitleBar>
+
+      {/* Quick Channel Picker Dropdown */}
+      {showPicker && (
+        <Box sx={{ px: 1, py: 0.5, bgcolor: 'background.paper', borderBottom: '1px solid', borderColor: 'divider' }}>
+          <FormControl fullWidth size="small">
+            <Select
+              value={resolvedField}
+              onChange={(e) => {
+                setSelectedField(e.target.value);
+                setShowPicker(false);
+              }}
+              size="small"
+              sx={{ fontSize: '0.72rem', height: 26 }}
+            >
+              {availableChannels.map((k) => (
+                <MenuItem key={k} value={k} sx={{ fontSize: '0.72rem' }}>
+                  {k} ({latestMetrics[k]})
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Box>
+      )}
 
       <Box
         sx={{
@@ -153,22 +275,25 @@ export default function TelemetrySingleChartIsland({
         }}
       >
         {/* Quick Stats Banner */}
-        <Stack direction="row" spacing={1} sx={{ mb: 0.5, px: 0.5 }}>
+        <Stack direction="row" spacing={1.5} sx={{ mb: 0.5, px: 0.5 }}>
           {minVal !== null && (
             <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.65rem' }}>
-              Min: <strong>{minVal}</strong> {unit}
+              Min: <strong style={{ color: theme.palette.text.primary }}>{minVal}</strong> {unit}
             </Typography>
           )}
           {maxVal !== null && (
             <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.65rem' }}>
-              Max: <strong>{maxVal}</strong> {unit}
+              Max: <strong style={{ color: theme.palette.text.primary }}>{maxVal}</strong> {unit}
             </Typography>
           )}
           {avgVal !== null && (
             <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.65rem' }}>
-              Avg: <strong>{avgVal}</strong> {unit}
+              Avg: <strong style={{ color: theme.palette.text.primary }}>{avgVal}</strong> {unit}
             </Typography>
           )}
+          <Typography variant="caption" sx={{ ml: 'auto', color: 'text.secondary', fontSize: '0.65rem' }}>
+            {chartData.length} pts
+          </Typography>
         </Stack>
 
         {/* Chart View */}
@@ -180,13 +305,13 @@ export default function TelemetrySingleChartIsland({
                 {
                   scaleType: 'band',
                   dataKey: 'time',
-                  tickLabelStyle: { fill: theme.palette.text.secondary, fontSize: 9 },
-                  tickInterval: (index, i) => i % Math.max(1, Math.floor(chartData.length / 5)) === 0,
+                  tickLabelStyle: { fill: theme.palette.text.secondary, fontSize: 8 },
+                  tickInterval: (index, i) => i % Math.max(1, Math.floor(chartData.length / 4)) === 0,
                 },
               ]}
               yAxis={[
                 {
-                  tickLabelStyle: { fill: theme.palette.text.secondary, fontSize: 9 },
+                  tickLabelStyle: { fill: theme.palette.text.secondary, fontSize: 8 },
                 },
               ]}
               series={[
@@ -194,12 +319,12 @@ export default function TelemetrySingleChartIsland({
                   dataKey: 'value',
                   label: `${title} (${unit})`,
                   color: color,
-                  showMark: false,
+                  showMark: chartData.length < 15,
                   curve: 'linear',
                   area: true,
                 },
               ]}
-              margin={{ top: 12, right: 12, bottom: 24, left: 36 }}
+              margin={{ top: 8, right: 10, bottom: 22, left: 36 }}
               slotProps={{
                 legend: { hidden: true },
               }}
@@ -212,11 +337,11 @@ export default function TelemetrySingleChartIsland({
                 alignItems: 'center',
                 justifyContent: 'center',
                 flexDirection: 'column',
-                gap: 1,
+                gap: 0.5,
               }}
             >
-              <Typography variant="caption" color="text.secondary">
-                {loadingHistory ? 'Loading telemetry points...' : `No ${title} data points for selected window.`}
+              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.72rem' }}>
+                {loadingHistory ? 'Loading telemetry points...' : `Waiting for ${resolvedField} telemetry points...`}
               </Typography>
             </Box>
           )}

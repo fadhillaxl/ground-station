@@ -154,7 +154,7 @@ const TtncMainLayout = () => {
     </StyledIslandParentNoScrollbar>,
     <StyledIslandParentNoScrollbar key="chart-bus-v">
       <TelemetrySingleChartIsland
-        field="sw_ana_bus_v"
+        field="sw_adcs_analogs_digital_bus_v"
         title="Bus Voltage"
         unit="V"
         color="#29b6f6"
@@ -163,7 +163,7 @@ const TtncMainLayout = () => {
     </StyledIslandParentNoScrollbar>,
     <StyledIslandParentNoScrollbar key="chart-bus-i">
       <TelemetrySingleChartIsland
-        field="sw_ana_eps_bus_i"
+        field="sw_ana_3p3_i"
         title="EPS Bus Current"
         unit="A"
         color="#00e676"
@@ -199,7 +199,7 @@ const TtncMainLayout = () => {
     </StyledIslandParentNoScrollbar>,
     <StyledIslandParentNoScrollbar key="chart-solar-i">
       <TelemetrySingleChartIsland
-        field="sw_ana_sa1_i"
+        field="sw_ana_axis1_curr"
         title="Solar Array Current"
         unit="mA"
         color="#ffd54f"
