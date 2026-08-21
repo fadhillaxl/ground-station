@@ -1,6 +1,6 @@
 import React from 'react';
+import { useSelector } from 'react-redux';
 import {
-  Paper,
   Box,
   Typography,
   Table,
@@ -11,21 +11,24 @@ import {
   TableRow,
   Chip,
 } from '@mui/material';
+import {
+  TitleBar,
+  islandTitleBarSx,
+  getClassNamesBasedOnGridEditing,
+} from '../common/common.jsx';
 
-export default function RawFrameInspector({ frames = [] }) {
+export default function RawFrameInspector({ frames: customFrames, gridEditable = false }) {
+  const storeFrames = useSelector((state) => state.telemetry?.rawFrames || []);
+  const isEditing = useSelector((state) => state.dashboard?.isEditing || state.telemetry?.gridEditable || gridEditable);
+  const frames = customFrames || storeFrames;
+
   return (
-    <Paper
-      elevation={2}
-      sx={{
-        p: 2,
-        borderRadius: 2,
-        backgroundColor: 'rgba(15,23,42,0.85)',
-        border: '1px solid rgba(255, 255, 255, 0.08)',
-        boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
-      }}
-    >
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={1.5}>
-        <Typography variant="subtitle1" fontWeight={700} color="text.primary">
+    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <TitleBar
+        className={getClassNamesBasedOnGridEditing(isEditing, [])}
+        sx={{ ...islandTitleBarSx, display: 'flex', alignItems: 'center', justifyContent: 'space-between', pr: 1 }}
+      >
+        <Typography variant="body2" fontWeight={700}>
           Raw Telemetry Packet Inspector
         </Typography>
 
@@ -34,51 +37,56 @@ export default function RawFrameInspector({ frames = [] }) {
           size="small"
           color="primary"
           variant="outlined"
-          sx={{ height: 20, fontSize: '0.7rem' }}
+          sx={{ height: 20, fontSize: '0.68rem', fontWeight: 700 }}
         />
-      </Box>
+      </TitleBar>
 
-      {frames.length === 0 ? (
-        <Typography variant="body2" color="text.secondary" py={2} textAlign="center">
-          No telemetry frames ingested yet. Waiting for live satellite passes...
-        </Typography>
-      ) : (
-        <TableContainer sx={{ maxHeight: 280 }}>
-          <Table size="small" stickyHeader>
-            <TableHead>
-              <TableRow>
-                <TableCell sx={{ backgroundColor: '#0f172a', fontWeight: 700, color: '#94a3b8' }}>
-                  Timestamp
-                </TableCell>
-                <TableCell sx={{ backgroundColor: '#0f172a', fontWeight: 700, color: '#94a3b8' }}>
-                  Payload (Hex / JSON)
-                </TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {frames.map((item) => (
-                <TableRow key={item.id} hover>
-                  <TableCell sx={{ fontSize: '0.75rem', fontFamily: 'monospace', color: '#64748b' }}>
-                    {new Date(item.timestamp).toLocaleTimeString()}
+      <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+        {frames.length === 0 ? (
+          <Box display="flex" alignItems="center" justifyContent="center" height="100%">
+            <Typography variant="body2" color="text.secondary" py={2} textAlign="center">
+              No telemetry frames ingested yet. Waiting for live satellite packets...
+            </Typography>
+          </Box>
+        ) : (
+          <TableContainer sx={{ height: '100%' }}>
+            <Table size="small" stickyHeader>
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ fontSize: '0.72rem', fontWeight: 700, width: 100 }}>
+                    Timestamp
                   </TableCell>
-                  <TableCell
-                    sx={{
-                      fontSize: '0.75rem',
-                      fontFamily: 'monospace',
-                      color: '#00e676',
-                      wordBreak: 'break-all',
-                    }}
-                  >
-                    {typeof item.raw === 'object'
-                      ? JSON.stringify(item.raw)
-                      : String(item.raw)}
+                  <TableCell sx={{ fontSize: '0.72rem', fontWeight: 700 }}>
+                    Payload (Hex / JSON)
                   </TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      )}
-    </Paper>
+              </TableHead>
+              <TableBody>
+                {frames.map((item) => (
+                  <TableRow key={item.id} hover>
+                    <TableCell sx={{ fontSize: '0.72rem', fontFamily: 'monospace', color: 'text.secondary', whiteSpace: 'nowrap' }}>
+                      {item.timestamp ? new Date(item.timestamp).toLocaleTimeString() : ''}
+                    </TableCell>
+                    <TableCell
+                      sx={{
+                        fontSize: '0.72rem',
+                        fontFamily: 'monospace',
+                        color: 'success.main',
+                        wordBreak: 'break-all',
+                      }}
+                    >
+                      {typeof item.raw === 'object'
+                        ? JSON.stringify(item.raw)
+                        : String(item.raw)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+      </Box>
+    </Box>
   );
 }
+

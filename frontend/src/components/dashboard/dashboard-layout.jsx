@@ -63,6 +63,7 @@ import {useEffect, useRef, useState} from "react";
 import {setGridEditable as setEarthViewGridEditable} from '../earthview/earthview-slice.jsx';
 import {setGridEditable as setTargetGridEditable} from '../target/target-slice.jsx';
 import {setGridEditable as setWaterfallGridEditable} from '../waterfall/waterfall-slice.jsx';
+import {setGridEditable as setTelemetryGridEditable} from '../telemetry/telemetry-slice.jsx';
 import CheckIcon from '@mui/icons-material/Check';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
@@ -163,6 +164,7 @@ function DashboardEditor() {
         dispatch(setEarthViewGridEditable(true));
         dispatch(setTargetGridEditable(true));
         dispatch(setWaterfallGridEditable(true));
+        dispatch(setTelemetryGridEditable(true));
     };
 
     const handleSaveClick = () => {
@@ -170,6 +172,7 @@ function DashboardEditor() {
         dispatch(setEarthViewGridEditable(false));
         dispatch(setTargetGridEditable(false));
         dispatch(setWaterfallGridEditable(false));
+        dispatch(setTelemetryGridEditable(false));
     };
 
     const handleCancelClick = () => {
@@ -177,6 +180,7 @@ function DashboardEditor() {
         dispatch(setEarthViewGridEditable(false));
         dispatch(setTargetGridEditable(false));
         dispatch(setWaterfallGridEditable(false));
+        dispatch(setTelemetryGridEditable(false));
     };
 
     return (

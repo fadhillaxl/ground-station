@@ -349,8 +349,8 @@ export const getNavigation = ({ isAdmin = false } = {}) => {
             icon: <SatelliteIcon />,
         },
         {
-            segment: 'telemetry',
-            title: i18n.t('ttc_telemetry', { ns: 'navigation', defaultValue: 'TT&C Telemetry' }),
+            segment: 'ttnc',
+            title: i18n.t('ttnc', { ns: 'navigation', defaultValue: 'TTNC' }),
             icon: <SensorsIcon />,
         },
         {

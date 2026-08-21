@@ -1,40 +1,95 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { resolveUrl } from '../../utils/url.js';
 
+export const DEFAULT_TELEMETRY_API = 'http://192.168.55.40:4001';
+
+// Fetch list of satellites from Telemetry API or fallback
+export const fetchSatellitesList = createAsyncThunk(
+  'telemetry/fetchSatellitesList',
+  async ({ apiUrl = DEFAULT_TELEMETRY_API } = {}, { rejectWithValue }) => {
+    try {
+      const response = await fetch(`${apiUrl}/api/satellites`);
+      const data = await response.json();
+      if (data && Array.isArray(data.satellites)) {
+        return data.satellites;
+      }
+      return rejectWithValue('Invalid satellites payload');
+    } catch (err) {
+      // Fallback local list if API server unreachable
+      return [
+        { dashboardUid: 'bflu6sloxxslcd', title: 'AEPEX', suid: '68506', tags: ['active', 'stable'] },
+        { dashboardUid: 'QGujdBBZk', title: 'AAUSAT4', suid: '41460', tags: ['active'] },
+        { dashboardUid: 'Abuh9WFHk', title: 'ALSat-1n', suid: '41789', tags: ['active'] },
+        { dashboardUid: 'bfhvxrnomp91ca', title: 'COSMO', suid: '50001', tags: ['active'] },
+        { dashboardUid: '9DnJFFO4z', title: 'Geoscan-Edelveis', suid: '55088', tags: ['active'] },
+        { dashboardUid: 'ffc0ehd32qfpcc', title: 'UMKA-1', suid: '57172', tags: ['active'] },
+      ];
+    }
+  }
+);
+
+// Fetch latest telemetry for a satellite
+export const fetchLatestTelemetry = createAsyncThunk(
+  'telemetry/fetchLatestTelemetry',
+  async ({ dashboardUid = 'bflu6sloxxslcd', apiUrl = DEFAULT_TELEMETRY_API } = {}, { rejectWithValue }) => {
+    try {
+      const response = await fetch(`${apiUrl}/api/satellites/${dashboardUid}/latest`);
+      const data = await response.json();
+      return {
+        dashboardUid,
+        satellite: data.satellite,
+        suid: data.suid,
+        latest: data.latest || {},
+      };
+    } catch (err) {
+      // If external API fails, try local backend proxy fallback
+      try {
+        const fallbackRes = await fetch(resolveUrl(`/api/telemetry/${dashboardUid}/latest`));
+        const fallbackData = await fallbackRes.json();
+        if (fallbackData.success) {
+          return { dashboardUid, latest: fallbackData.data };
+        }
+      } catch (localErr) {
+        // Ignore secondary error
+      }
+      return rejectWithValue(err.message);
+    }
+  }
+);
+
+// Fetch history time-series data for a field
 export const fetchTelemetryHistory = createAsyncThunk(
   'telemetry/fetchTelemetryHistory',
-  async ({ satelliteId, metricKeys, limit = 500 }, { rejectWithValue }) => {
+  async ({ dashboardUid = 'bflu6sloxxslcd', field = 'sw_ana_bus_v', from = 'now-2d', to = 'now', apiUrl = DEFAULT_TELEMETRY_API }, { rejectWithValue }) => {
     try {
-      const params = new URLSearchParams();
-      if (metricKeys && metricKeys.length > 0) {
-        params.append('metric_keys', metricKeys.join(','));
-      }
-      params.append('limit', String(limit));
-
-      const response = await fetch(
-        resolveUrl(`/api/telemetry/${satelliteId}/history?${params.toString()}`)
-      );
+      const params = new URLSearchParams({ field, from, to });
+      const response = await fetch(`${apiUrl}/api/satellites/${dashboardUid}/history?${params.toString()}`);
       const data = await response.json();
-      if (!data.success) {
-        return rejectWithValue(data.error);
-      }
-      return { satelliteId, history: data.data };
+      return {
+        dashboardUid,
+        field,
+        from,
+        to,
+        points: Array.isArray(data.points) ? data.points : [],
+      };
     } catch (err) {
       return rejectWithValue(err.message);
     }
   }
 );
 
-export const fetchLatestTelemetry = createAsyncThunk(
-  'telemetry/fetchLatestTelemetry',
-  async ({ satelliteId }, { rejectWithValue }) => {
+// Execute custom InfluxQL query
+export const executeInfluxQuery = createAsyncThunk(
+  'telemetry/executeInfluxQuery',
+  async ({ dashboardUid = 'bflu6sloxxslcd', query, from = 'now-1d', to = 'now', apiUrl = DEFAULT_TELEMETRY_API }, { rejectWithValue }) => {
     try {
-      const response = await fetch(resolveUrl(`/api/telemetry/${satelliteId}/latest`));
+      const response = await fetch(`${apiUrl}/api/satellites/${dashboardUid}/query`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, from, to }),
+      });
       const data = await response.json();
-      if (!data.success) {
-        return rejectWithValue(data.error);
-      }
-      return { satelliteId, latest: data.data };
+      return data;
     } catch (err) {
       return rejectWithValue(err.message);
     }
@@ -61,34 +116,64 @@ export const importSatnogsSchema = createAsyncThunk(
   }
 );
 
+const initialState = {
+  apiUrl: DEFAULT_TELEMETRY_API,
+  selectedSatelliteUid: 'bflu6sloxxslcd', // AEPEX default UID
+  selectedSatelliteTitle: 'AEPEX',
+  satellitesList: [
+    { dashboardUid: 'bflu6sloxxslcd', title: 'AEPEX', suid: '68506', tags: ['active', 'stable'] },
+    { dashboardUid: 'QGujdBBZk', title: 'AAUSAT4', suid: '41460', tags: ['active'] },
+    { dashboardUid: 'Abuh9WFHk', title: 'ALSat-1n', suid: '41789', tags: ['active'] },
+    { dashboardUid: 'bfhvxrnomp91ca', title: 'COSMO', suid: '50001', tags: ['active'] },
+    { dashboardUid: '9DnJFFO4z', title: 'Geoscan-Edelveis', suid: '55088', tags: ['active'] },
+    { dashboardUid: 'ffc0ehd32qfpcc', title: 'UMKA-1', suid: '57172', tags: ['active'] },
+  ],
+  latestMetrics: {},
+  historyMetrics: [],
+  historyField: 'sw_ana_bus_v',
+  historyTimeRange: 'now-2d',
+  importedSchema: null,
+  rawFrames: [],
+  gridEditable: false,
+  autoRefresh: true,
+  refreshIntervalMs: 5000,
+  loading: false,
+  loadingHistory: false,
+  error: null,
+};
+
 const telemetrySlice = createSlice({
   name: 'telemetry',
-  initialState: {
-    selectedSatelliteId: '98864', // Default SUID (e.g. AEPEX / SatNOGS)
-    latestMetrics: {},
-    historyMetrics: [],
-    importedSchema: null,
-    rawFrames: [],
-    loading: false,
-    error: null,
-  },
+  initialState,
   reducers: {
-    setSelectedSatelliteId(state, action) {
-      state.selectedSatelliteId = action.payload;
+    setGridEditable(state, action) {
+      state.gridEditable = Boolean(action.payload);
+    },
+    setSelectedSatellite(state, action) {
+      const { dashboardUid, title } = action.payload;
+      state.selectedSatelliteUid = dashboardUid;
+      if (title) state.selectedSatelliteTitle = title;
+    },
+    setHistoryField(state, action) {
+      state.historyField = action.payload;
+    },
+    setHistoryTimeRange(state, action) {
+      state.historyTimeRange = action.payload;
+    },
+    setAutoRefresh(state, action) {
+      state.autoRefresh = Boolean(action.payload);
+    },
+    setApiUrl(state, action) {
+      state.apiUrl = action.payload;
     },
     receiveLiveTelemetry(state, action) {
       const { satellite_id, data } = action.payload;
-      if (String(satellite_id) === String(state.selectedSatelliteId)) {
+      if (String(satellite_id) === String(state.selectedSatelliteUid)) {
         if (data?.points) {
           data.points.forEach((pt) => {
             const key = pt.metric_key || pt.key;
             if (key) {
-              state.latestMetrics[key] = {
-                metric_key: key,
-                value: pt.value,
-                unit: pt.unit,
-                timestamp: new Date().toISOString(),
-              };
+              state.latestMetrics[key] = pt.value;
             }
           });
         }
@@ -112,20 +197,43 @@ const telemetrySlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      .addCase(fetchTelemetryHistory.pending, (state) => {
+      .addCase(fetchSatellitesList.fulfilled, (state, action) => {
+        state.satellitesList = action.payload;
+      })
+      .addCase(fetchLatestTelemetry.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
-      .addCase(fetchTelemetryHistory.fulfilled, (state, action) => {
+      .addCase(fetchLatestTelemetry.fulfilled, (state, action) => {
         state.loading = false;
-        state.historyMetrics = action.payload.history;
+        const latest = action.payload.latest || {};
+        state.latestMetrics = latest;
+
+        // Ingest into raw frames history log
+        if (Object.keys(latest).length > 0) {
+          state.rawFrames.unshift({
+            id: Date.now(),
+            timestamp: latest.Time ? new Date(latest.Time).toISOString() : new Date().toISOString(),
+            raw: latest,
+          });
+          if (state.rawFrames.length > 100) {
+            state.rawFrames.pop();
+          }
+        }
+      })
+      .addCase(fetchLatestTelemetry.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload || 'Failed to fetch latest telemetry';
+      })
+      .addCase(fetchTelemetryHistory.pending, (state) => {
+        state.loadingHistory = true;
+      })
+      .addCase(fetchTelemetryHistory.fulfilled, (state, action) => {
+        state.loadingHistory = false;
+        state.historyMetrics = action.payload.points;
       })
       .addCase(fetchTelemetryHistory.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload || 'Failed to fetch telemetry history';
-      })
-      .addCase(fetchLatestTelemetry.fulfilled, (state, action) => {
-        state.latestMetrics = action.payload.latest;
+        state.loadingHistory = false;
       })
       .addCase(importSatnogsSchema.fulfilled, (state, action) => {
         state.importedSchema = action.payload;
@@ -133,7 +241,15 @@ const telemetrySlice = createSlice({
   },
 });
 
-export const { setSelectedSatelliteId, receiveLiveTelemetry, clearTelemetryData } =
-  telemetrySlice.actions;
+export const {
+  setGridEditable,
+  setSelectedSatellite,
+  setHistoryField,
+  setHistoryTimeRange,
+  setAutoRefresh,
+  setApiUrl,
+  receiveLiveTelemetry,
+  clearTelemetryData,
+} = telemetrySlice.actions;
 
 export default telemetrySlice.reducer;
