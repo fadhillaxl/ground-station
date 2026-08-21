@@ -12,26 +12,21 @@ export default function MetricCardsIsland({ gridEditable = false }) {
   const latestMetrics = useSelector((state) => state.telemetry?.latestMetrics || {});
   const isEditing = useSelector((state) => state.dashboard?.isEditing || state.telemetry?.gridEditable || gridEditable);
 
-  // Extract / calculate subsystem metrics
-  const busVoltage = latestMetrics.sw_ana_bus_v
-    ? (Number(latestMetrics.sw_ana_bus_v) * 0.0088623).toFixed(2)
-    : (latestMetrics.vbat ?? 8.24);
+  // Extract / calculate subsystem metrics with intelligent scaling
+  const rawBusV = latestMetrics.sw_adcs_analogs_digital_bus_v ?? latestMetrics.sw_ana_bus_v ?? latestMetrics.vbat ?? 8.24;
+  const busVoltage = Number(rawBusV) > 50 ? (Number(rawBusV) / 1000).toFixed(2) : Number(rawBusV).toFixed(2);
 
-  const busCurrent = latestMetrics.sw_ana_eps_bus_i
-    ? (Number(latestMetrics.sw_ana_eps_bus_i) * 0.0012207).toFixed(3)
-    : (latestMetrics.sw_ana_axis1_curr ?? 0.142);
+  const rawBusI = latestMetrics.sw_ana_3p3_i ?? latestMetrics.sw_ana_eps_bus_i ?? latestMetrics.sw_ana_axis1_curr ?? 0.142;
+  const busCurrent = Number(rawBusI) > 10 ? (Number(rawBusI) / 1000).toFixed(3) : Number(rawBusI).toFixed(3);
 
-  const batteryVoltage = latestMetrics.sw_ana_bat1_v
-    ? (Number(latestMetrics.sw_ana_bat1_v) * 0.0088623).toFixed(2)
-    : 8.15;
+  const rawBatV = latestMetrics.sw_ana_bat1_v ?? latestMetrics.sw_ana_bat_v ?? 8.15;
+  const batteryVoltage = Number(rawBatV) > 50 ? (Number(rawBatV) / 1000).toFixed(2) : Number(rawBatV).toFixed(2);
 
-  const epsTemp = latestMetrics.sw_ana_eps_temp
-    ? (Number(latestMetrics.sw_ana_eps_temp) * -0.13622 + 125.55).toFixed(1)
-    : (latestMetrics.temp_board ?? 24.5);
+  const rawEpsTemp = latestMetrics.sw_ana_eps_temp ?? latestMetrics.temp_board ?? 24.5;
+  const epsTemp = Number(rawEpsTemp) > 100 ? (Number(rawEpsTemp) / 100).toFixed(1) : Number(rawEpsTemp).toFixed(1);
 
-  const cdhTemp = latestMetrics.sw_ana_cdh_temp
-    ? (Number(latestMetrics.sw_ana_cdh_temp) * -0.13622 + 125.55).toFixed(1)
-    : 22.8;
+  const rawCdhTemp = latestMetrics.sw_ana_cdh_temp ?? 22.8;
+  const cdhTemp = Number(rawCdhTemp) > 100 ? (Number(rawCdhTemp) / 100).toFixed(1) : Number(rawCdhTemp).toFixed(1);
 
   const cmdCount = latestMetrics.sw_cmd_recv_count ?? 88;
   const adcsMode = latestMetrics.sw_adcs_mode !== undefined ? (latestMetrics.sw_adcs_mode ? 'ACTIVE' : 'STANDBY') : 'SUN_POINT';

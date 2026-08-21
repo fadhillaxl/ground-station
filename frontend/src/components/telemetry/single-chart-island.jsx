@@ -24,16 +24,50 @@ import {
 import { fetchTelemetryHistory } from './telemetry-slice.jsx';
 
 const FIELD_ALIASES = {
-  sw_ana_bus_v: ['sw_ana_bus_v', 'sw_adcs_analogs_digital_bus_v', 'sw_ana_5p0_v', 'sw_ana_3p3_v', 'sw_ana_2p5_v'],
-  sw_ana_eps_bus_i: ['sw_ana_eps_bus_i', 'sw_ana_3p3_i', 'sw_ana_afire_curr', 'sw_ana_axis1_curr', 'sw_ana_axis2_curr'],
+  sw_adcs_analogs_digital_bus_v: ['sw_adcs_analogs_digital_bus_v', 'sw_ana_bus_v', 'sw_ana_5p0_v', 'sw_ana_3p3_v'],
+  sw_ana_3p3_i: ['sw_ana_3p3_i', 'sw_ana_eps_bus_i', 'sw_ana_axis1_curr', 'sw_ana_afire_curr'],
   sw_ana_bat1_v: ['sw_ana_bat1_v', 'sw_ana_bat_v', 'sw_ana_batt_v', 'sw_ana_5p0_v'],
   sw_ana_eps_temp: ['sw_ana_eps_temp', 'sw_adcs_analogs_det_temp', 'sw_adcs_analogs_motor1_temp'],
   sw_ana_cdh_temp: ['sw_ana_cdh_temp', 'sw_adcs_analogs_motor2_temp', 'sw_adcs_analogs_motor3_temp'],
-  sw_ana_sa1_i: ['sw_ana_sa1_i', 'sw_ana_axis1_curr', 'sw_ana_axis2_curr', 'sw_ana_axis3_curr', 'sw_ana_bat1_curr'],
+  sw_ana_axis1_curr: ['sw_ana_axis1_curr', 'sw_ana_sa1_i', 'sw_ana_axis2_curr', 'sw_ana_axis3_curr'],
 };
 
+/**
+ * Intelligent telemetry engineering unit converter and scaler:
+ * Converts raw ADC / centi-degrees / mV into standard engineering units.
+ */
+export function scaleTelemetryValue(field, rawVal, defaultUnit = '') {
+  if (rawVal === null || rawVal === undefined || isNaN(Number(rawVal))) {
+    return { val: 0, displayUnit: defaultUnit };
+  }
+  const num = Number(rawVal);
+  const lowField = (field || '').toLowerCase();
+
+  // 1. Temperature fields: raw integer is centi-degrees (e.g. 2662 -> 26.62 °C)
+  if (lowField.includes('temp')) {
+    const scaled = num > 100 ? num / 100 : num;
+    return { val: Number(scaled.toFixed(2)), displayUnit: '°C' };
+  }
+
+  // 2. Voltage fields: raw integer is mV (e.g. 3866 mV -> 3.866 V, 1786 mV -> 1.786 V)
+  if (lowField.includes('volt') || lowField.endsWith('_v') || lowField.includes('_bus_v') || lowField.includes('_bat')) {
+    const scaled = num > 50 ? num / 1000 : num;
+    return { val: Number(scaled.toFixed(3)), displayUnit: 'V' };
+  }
+
+  // 3. Current fields: raw integer is mA (e.g. 471 mA -> 471 mA or 0.471 A)
+  if (lowField.includes('curr') || lowField.endsWith('_i') || lowField.includes('_bus_i')) {
+    if (defaultUnit === 'A' && num > 10) {
+      return { val: Number((num / 1000).toFixed(3)), displayUnit: 'A' };
+    }
+    return { val: Number(num.toFixed(1)), displayUnit: defaultUnit || 'mA' };
+  }
+
+  return { val: Number(num.toFixed(2)), displayUnit: defaultUnit };
+}
+
 export default function TelemetrySingleChartIsland({
-  field: defaultField = 'sw_ana_bus_v',
+  field: defaultField = 'sw_adcs_analogs_digital_bus_v',
   title = 'Bus Voltage',
   unit = 'V',
   color = '#29b6f6',
@@ -93,8 +127,8 @@ export default function TelemetrySingleChartIsland({
       .sort();
   }, [latestMetrics]);
 
-  // Build chart dataset by combining history API points with live rawFrames
-  const { chartData, minVal, maxVal, avgVal, latestVal } = useMemo(() => {
+  // Build chart dataset by scaling & converting raw points
+  const { chartData, minVal, maxVal, avgVal, latestVal, displayUnit } = useMemo(() => {
     const rawPoints = fieldHistories?.[resolvedField] || [];
     const pointsMap = new Map();
 
@@ -142,16 +176,23 @@ export default function TelemetrySingleChartIsland({
     // Sort chronologically
     const sortedEntries = Array.from(pointsMap.entries()).sort((a, b) => a[0] - b[0]);
     if (sortedEntries.length === 0) {
+      const { val: fallbackScaled, displayUnit: unitFallback } = scaleTelemetryValue(
+        resolvedField,
+        latestMetrics?.[resolvedField],
+        unit
+      );
       return {
         chartData: [],
         minVal: null,
         maxVal: null,
         avgVal: null,
-        latestVal: latestMetrics?.[resolvedField] ?? null,
+        latestVal: latestMetrics?.[resolvedField] !== undefined ? fallbackScaled : null,
+        displayUnit: unitFallback,
       };
     }
 
-    // Downsample to max 80 points for smooth canvas rendering
+    // Scale each point and determine unit
+    let resolvedUnit = unit;
     const step = Math.max(1, Math.floor(sortedEntries.length / 80));
     const sampled = [];
     let min = Infinity;
@@ -160,23 +201,26 @@ export default function TelemetrySingleChartIsland({
     let count = 0;
 
     for (let i = 0; i < sortedEntries.length; i += step) {
-      const [tMs, num] = sortedEntries[i];
+      const [tMs, rawNum] = sortedEntries[i];
+      const { val: scaledNum, displayUnit: curUnit } = scaleTelemetryValue(resolvedField, rawNum, unit);
+      resolvedUnit = curUnit;
       sampled.push({
         time: new Date(tMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-        value: Number(num.toFixed(4)),
+        value: scaledNum,
       });
-      if (num < min) min = num;
-      if (num > max) max = num;
-      sum += num;
+      if (scaledNum < min) min = scaledNum;
+      if (scaledNum > max) max = scaledNum;
+      sum += scaledNum;
       count++;
     }
 
-    // Ensure the very last point is always included
-    const [lastTime, lastNum] = sortedEntries[sortedEntries.length - 1];
-    if (sampled.length > 0 && sampled[sampled.length - 1].value !== lastNum) {
+    // Ensure last point is included
+    const [lastTime, lastRawNum] = sortedEntries[sortedEntries.length - 1];
+    const { val: lastScaled, displayUnit: finalUnit } = scaleTelemetryValue(resolvedField, lastRawNum, unit);
+    if (sampled.length > 0 && sampled[sampled.length - 1].value !== lastScaled) {
       sampled.push({
         time: new Date(lastTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-        value: Number(lastNum.toFixed(4)),
+        value: lastScaled,
       });
     }
 
@@ -185,9 +229,10 @@ export default function TelemetrySingleChartIsland({
       minVal: count > 0 ? min.toFixed(2) : null,
       maxVal: count > 0 ? max.toFixed(2) : null,
       avgVal: count > 0 ? (sum / count).toFixed(2) : null,
-      latestVal: lastNum !== undefined ? lastNum : latestMetrics?.[resolvedField],
+      latestVal: lastScaled,
+      displayUnit: finalUnit || resolvedUnit,
     };
-  }, [fieldHistories, resolvedField, rawFrames, latestMetrics]);
+  }, [fieldHistories, resolvedField, rawFrames, latestMetrics, unit]);
 
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
@@ -217,7 +262,7 @@ export default function TelemetrySingleChartIsland({
           {latestVal !== null && latestVal !== undefined && (
             <Chip
               size="small"
-              label={`${latestVal} ${unit}`}
+              label={`${latestVal} ${displayUnit}`}
               sx={{
                 height: 20,
                 fontSize: '0.68rem',
@@ -278,17 +323,17 @@ export default function TelemetrySingleChartIsland({
         <Stack direction="row" spacing={1.5} sx={{ mb: 0.5, px: 0.5 }}>
           {minVal !== null && (
             <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.65rem' }}>
-              Min: <strong style={{ color: theme.palette.text.primary }}>{minVal}</strong> {unit}
+              Min: <strong style={{ color: theme.palette.text.primary }}>{minVal}</strong> {displayUnit}
             </Typography>
           )}
           {maxVal !== null && (
             <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.65rem' }}>
-              Max: <strong style={{ color: theme.palette.text.primary }}>{maxVal}</strong> {unit}
+              Max: <strong style={{ color: theme.palette.text.primary }}>{maxVal}</strong> {displayUnit}
             </Typography>
           )}
           {avgVal !== null && (
             <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.65rem' }}>
-              Avg: <strong style={{ color: theme.palette.text.primary }}>{avgVal}</strong> {unit}
+              Avg: <strong style={{ color: theme.palette.text.primary }}>{avgVal}</strong> {displayUnit}
             </Typography>
           )}
           <Typography variant="caption" sx={{ ml: 'auto', color: 'text.secondary', fontSize: '0.65rem' }}>
@@ -317,14 +362,14 @@ export default function TelemetrySingleChartIsland({
               series={[
                 {
                   dataKey: 'value',
-                  label: `${title} (${unit})`,
+                  label: `${title} (${displayUnit})`,
                   color: color,
                   showMark: chartData.length < 15,
                   curve: 'linear',
                   area: true,
                 },
               ]}
-              margin={{ top: 8, right: 10, bottom: 22, left: 36 }}
+              margin={{ top: 8, right: 10, bottom: 22, left: 38 }}
               slotProps={{
                 legend: { hidden: true },
               }}
