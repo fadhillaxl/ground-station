@@ -58,6 +58,7 @@ import SatellitePassTimeline from "./timeline-main.jsx";
 import TargetSelectorBar from "./target-selector-bar.jsx";
 import RotatorControl from "../dashboard/rotator-control.jsx";
 import RigControl from "../dashboard/rig-control.jsx";
+import TargetCameraIsland from "./camera-island.jsx";
 
 
 
@@ -72,7 +73,7 @@ export const handleSetGridEditableTarget = function (value) {
 };
 
 export const gridLayoutStoreName = 'target-sat-track-layouts';
-const LAYOUT_SCHEMA_VERSION = 5;
+const LAYOUT_SCHEMA_VERSION = 6;
 const SHARED_RESIZE_HANDLES = ['s', 'sw', 'w', 'se', 'nw', 'ne', 'e'];
 const FIXED_ISLAND_HEIGHTS = {
     lg: {'rotator-control': 29, 'rig-control': 29},
@@ -339,43 +340,14 @@ const TrackingLayout = React.memo(function TrackingLayout() {
             "i": "map",
             "x": 0,
             "y": 0,
-            "w": 20,
+            "w": 18,
             "h": 29,
-            "moved": false,
-            "static": false,
-            "resizeHandles": ["s", "sw", "w", "se", "nw", "ne", "e"]
-        }, {
-            "i": "info",
-            "x": 40,
-            "y": 0,
-            "w": 8,
-            "h": 29,
-            "minH": 7,
-            "moved": false,
-            "static": false,
-            "resizeHandles": ["s", "sw", "w", "se", "nw", "ne", "e"]
-        }, {
-            "i": "passes",
-            "x": 0,
-            "y": 43,
-            "w": 48,
-            "h": 14,
-            "minH": 7,
-            "moved": false,
-            "static": false,
-            "resizeHandles": ["s", "sw", "w", "se", "nw", "ne", "e"]
-        }, {
-            "i": "timeline",
-            "x": 0,
-            "y": 29,
-            "w": 48,
-            "h": 14,
             "moved": false,
             "static": false,
             "resizeHandles": ["s", "sw", "w", "se", "nw", "ne", "e"]
         }, {
             "i": "rotator-control",
-            "x": 20,
+            "x": 18,
             "y": 0,
             "w": 10,
             "h": 29,
@@ -386,12 +358,51 @@ const TrackingLayout = React.memo(function TrackingLayout() {
             "resizeHandles": ["s", "sw", "w", "se", "nw", "ne", "e"]
         }, {
             "i": "rig-control",
-            "x": 30,
+            "x": 28,
             "y": 0,
             "w": 10,
             "h": 29,
             "minH": 29,
             "maxH": 29,
+            "moved": false,
+            "static": false,
+            "resizeHandles": ["s", "sw", "w", "se", "nw", "ne", "e"]
+        }, {
+            "i": "camera",
+            "x": 38,
+            "y": 0,
+            "w": 10,
+            "h": 29,
+            "minH": 12,
+            "moved": false,
+            "static": false,
+            "resizeHandles": ["s", "sw", "w", "se", "nw", "ne", "e"]
+        }, {
+            "i": "info",
+            "x": 0,
+            "y": 29,
+            "w": 12,
+            "h": 22,
+            "minH": 7,
+            "moved": false,
+            "static": false,
+            "resizeHandles": ["s", "sw", "w", "se", "nw", "ne", "e"]
+        }, {
+            "i": "timeline",
+            "x": 12,
+            "y": 29,
+            "w": 36,
+            "h": 22,
+            "moved": false,
+            "static": false,
+            "resizeHandles": ["s", "sw", "w", "se", "nw", "ne", "e"]
+        }, {
+            "i": "passes",
+            "x": 0,
+            "y": 51,
+            "w": 48,
+            "h": 14,
+            "minH": 7,
             "moved": false,
             "static": false,
             "resizeHandles": ["s", "sw", "w", "se", "nw", "ne", "e"]
@@ -400,37 +411,18 @@ const TrackingLayout = React.memo(function TrackingLayout() {
             "i": "map",
             "x": 0,
             "y": 0,
-            "w": 28,
+            "w": 24,
             "h": 24,
             "moved": false,
             "static": false,
             "resizeHandles": ["s", "sw", "w", "se", "nw", "ne", "e"]
         }, {
-            "i": "info",
-            "x": 28,
+            "i": "camera",
+            "x": 24,
             "y": 0,
-            "w": 12,
+            "w": 16,
             "h": 24,
-            "minH": 7,
-            "moved": false,
-            "static": false,
-            "resizeHandles": ["s", "sw", "w", "se", "nw", "ne", "e"]
-        }, {
-            "i": "passes",
-            "x": 0,
-            "y": 68,
-            "w": 40,
-            "h": 18,
-            "minH": 7,
-            "moved": false,
-            "static": false,
-            "resizeHandles": ["s", "sw", "w", "se", "nw", "ne", "e"]
-        }, {
-            "i": "timeline",
-            "x": 0,
-            "y": 53,
-            "w": 40,
-            "h": 15,
+            "minH": 12,
             "moved": false,
             "static": false,
             "resizeHandles": ["s", "sw", "w", "se", "nw", "ne", "e"]
@@ -456,49 +448,59 @@ const TrackingLayout = React.memo(function TrackingLayout() {
             "moved": false,
             "static": false,
             "resizeHandles": ["s", "sw", "w", "se", "nw", "ne", "e"]
-        }],
-        "sm": [{
-            "i": "map",
-            "x": 0,
-            "y": 0,
-            "w": 12,
-            "h": 27,
-            "moved": false,
-            "static": false,
-            "resizeHandles": ["s", "sw", "w", "se", "nw", "ne", "e"]
         }, {
             "i": "info",
-            "x": 12,
-            "y": 0,
-            "w": 12,
-            "h": 27,
-            "minH": 7,
-            "moved": false,
-            "static": false,
-            "resizeHandles": ["s", "sw", "w", "se", "nw", "ne", "e"]
-        }, {
-            "i": "passes",
             "x": 0,
-            "y": 67,
-            "w": 24,
-            "h": 17,
+            "y": 53,
+            "w": 12,
+            "h": 22,
             "minH": 7,
             "moved": false,
             "static": false,
             "resizeHandles": ["s", "sw", "w", "se", "nw", "ne", "e"]
         }, {
             "i": "timeline",
+            "x": 12,
+            "y": 53,
+            "w": 28,
+            "h": 22,
+            "moved": false,
+            "static": false,
+            "resizeHandles": ["s", "sw", "w", "se", "nw", "ne", "e"]
+        }, {
+            "i": "passes",
             "x": 0,
-            "y": 56,
+            "y": 75,
+            "w": 40,
+            "h": 16,
+            "minH": 7,
+            "moved": false,
+            "static": false,
+            "resizeHandles": ["s", "sw", "w", "se", "nw", "ne", "e"]
+        }],
+        "sm": [{
+            "i": "map",
+            "x": 0,
+            "y": 0,
             "w": 24,
-            "h": 11,
+            "h": 27,
+            "moved": false,
+            "static": false,
+            "resizeHandles": ["s", "sw", "w", "se", "nw", "ne", "e"]
+        }, {
+            "i": "camera",
+            "x": 0,
+            "y": 27,
+            "w": 24,
+            "h": 22,
+            "minH": 12,
             "moved": false,
             "static": false,
             "resizeHandles": ["s", "sw", "w", "se", "nw", "ne", "e"]
         }, {
             "i": "rotator-control",
             "x": 0,
-            "y": 27,
+            "y": 49,
             "w": 12,
             "h": 29,
             "minH": 29,
@@ -509,11 +511,40 @@ const TrackingLayout = React.memo(function TrackingLayout() {
         }, {
             "i": "rig-control",
             "x": 12,
-            "y": 27,
+            "y": 49,
             "w": 12,
             "h": 29,
             "minH": 29,
             "maxH": 29,
+            "moved": false,
+            "static": false,
+            "resizeHandles": ["s", "sw", "w", "se", "nw", "ne", "e"]
+        }, {
+            "i": "info",
+            "x": 0,
+            "y": 78,
+            "w": 24,
+            "h": 22,
+            "minH": 7,
+            "moved": false,
+            "static": false,
+            "resizeHandles": ["s", "sw", "w", "se", "nw", "ne", "e"]
+        }, {
+            "i": "timeline",
+            "x": 0,
+            "y": 100,
+            "w": 24,
+            "h": 14,
+            "moved": false,
+            "static": false,
+            "resizeHandles": ["s", "sw", "w", "se", "nw", "ne", "e"]
+        }, {
+            "i": "passes",
+            "x": 0,
+            "y": 114,
+            "w": 24,
+            "h": 16,
+            "minH": 7,
             "moved": false,
             "static": false,
             "resizeHandles": ["s", "sw", "w", "se", "nw", "ne", "e"]
@@ -528,38 +559,29 @@ const TrackingLayout = React.memo(function TrackingLayout() {
             "static": false,
             "resizeHandles": ["s", "sw", "w", "se", "nw", "ne", "e"]
         }, {
-            "i": "info",
+            "i": "camera",
             "x": 0,
             "y": 17,
             "w": 8,
-            "h": 27,
-            "minH": 7,
+            "h": 20,
+            "minH": 12,
             "moved": false,
             "static": false,
             "resizeHandles": ["s", "sw", "w", "se", "nw", "ne", "e"]
         }, {
-            "i": "passes",
+            "i": "info",
             "x": 0,
-            "y": 86,
+            "y": 37,
             "w": 8,
-            "h": 19,
+            "h": 24,
             "minH": 7,
-            "moved": false,
-            "static": false,
-            "resizeHandles": ["s", "sw", "w", "se", "nw", "ne", "e"]
-        }, {
-            "i": "timeline",
-            "x": 0,
-            "y": 73,
-            "w": 8,
-            "h": 13,
             "moved": false,
             "static": false,
             "resizeHandles": ["s", "sw", "w", "se", "nw", "ne", "e"]
         }, {
             "i": "rotator-control",
             "x": 0,
-            "y": 44,
+            "y": 61,
             "w": 4,
             "h": 29,
             "minH": 29,
@@ -570,11 +592,30 @@ const TrackingLayout = React.memo(function TrackingLayout() {
         }, {
             "i": "rig-control",
             "x": 4,
-            "y": 44,
+            "y": 61,
             "w": 4,
             "h": 29,
             "minH": 29,
             "maxH": 29,
+            "moved": false,
+            "static": false,
+            "resizeHandles": ["s", "sw", "w", "se", "nw", "ne", "e"]
+        }, {
+            "i": "timeline",
+            "x": 0,
+            "y": 90,
+            "w": 8,
+            "h": 13,
+            "moved": false,
+            "static": false,
+            "resizeHandles": ["s", "sw", "w", "se", "nw", "ne", "e"]
+        }, {
+            "i": "passes",
+            "x": 0,
+            "y": 103,
+            "w": 8,
+            "h": 19,
+            "minH": 7,
             "moved": false,
             "static": false,
             "resizeHandles": ["s", "sw", "w", "se", "nw", "ne", "e"]
@@ -589,38 +630,29 @@ const TrackingLayout = React.memo(function TrackingLayout() {
             "static": false,
             "resizeHandles": ["s", "sw", "w", "se", "nw", "ne", "e"]
         }, {
-            "i": "info",
+            "i": "camera",
             "x": 0,
             "y": 17,
             "w": 8,
-            "h": 29,
-            "minH": 7,
+            "h": 20,
+            "minH": 12,
             "moved": false,
             "static": false,
             "resizeHandles": ["s", "sw", "w", "se", "nw", "ne", "e"]
         }, {
-            "i": "passes",
+            "i": "info",
             "x": 0,
-            "y": 58,
+            "y": 37,
             "w": 8,
-            "h": 24,
+            "h": 26,
             "minH": 7,
-            "moved": false,
-            "static": false,
-            "resizeHandles": ["s", "sw", "w", "se", "nw", "ne", "e"]
-        }, {
-            "i": "timeline",
-            "x": 0,
-            "y": 46,
-            "w": 8,
-            "h": 12,
             "moved": false,
             "static": false,
             "resizeHandles": ["s", "sw", "w", "se", "nw", "ne", "e"]
         }, {
             "i": "rotator-control",
             "x": 0,
-            "y": 82,
+            "y": 63,
             "w": 8,
             "h": 29,
             "minH": 29,
@@ -631,11 +663,30 @@ const TrackingLayout = React.memo(function TrackingLayout() {
         }, {
             "i": "rig-control",
             "x": 0,
-            "y": 111,
+            "y": 92,
             "w": 8,
             "h": 29,
             "minH": 29,
             "maxH": 29,
+            "moved": false,
+            "static": false,
+            "resizeHandles": ["s", "sw", "w", "se", "nw", "ne", "e"]
+        }, {
+            "i": "timeline",
+            "x": 0,
+            "y": 121,
+            "w": 8,
+            "h": 12,
+            "moved": false,
+            "static": false,
+            "resizeHandles": ["s", "sw", "w", "se", "nw", "ne", "e"]
+        }, {
+            "i": "passes",
+            "x": 0,
+            "y": 133,
+            "w": 8,
+            "h": 20,
+            "minH": 7,
             "moved": false,
             "static": false,
             "resizeHandles": ["s", "sw", "w", "se", "nw", "ne", "e"]
@@ -726,6 +777,9 @@ const TrackingLayout = React.memo(function TrackingLayout() {
         <StyledIslandParentScrollbar key="rig-control">
             <RigControl/>
         </StyledIslandParentScrollbar>,
+        <StyledIslandParentNoScrollbar key="camera">
+            <TargetCameraIsland/>
+        </StyledIslandParentNoScrollbar>,
     ];
 
     const ResponsiveGridLayoutParent = mounted ? (
