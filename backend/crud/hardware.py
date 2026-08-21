@@ -471,7 +471,11 @@ async def add_camera(session: AsyncSession, data: dict) -> dict:
     Create and add a new camera record.
     """
     try:
-        camera_type = _normalize_camera_type(data.get("type", "mjpeg"))
+        data = dict(data or {})
+        camera_type = _normalize_camera_type(data.get("type", "hls"))
+        status = data.get("status", "active")
+        if status not in ("active", "inactive"):
+            status = "active"
         new_id = uuid.uuid4()
         now = datetime.now(timezone.utc)
         stmt = (
@@ -481,6 +485,7 @@ async def add_camera(session: AsyncSession, data: dict) -> dict:
                 name=data["name"],
                 url=data.get("url", ""),
                 type=camera_type,
+                status=status,
                 added=now,
                 updated=now,
             )
@@ -507,13 +512,18 @@ async def edit_camera(session: AsyncSession, data: dict) -> dict:
         data = dict(data or {})
         # Extract camera_id from data
         camera_id = data.pop("id", None)
-        camera_id = uuid.UUID(camera_id)
-
         if not camera_id:
-            raise Exception("id is required.")
+            return {"success": False, "error": "id is required."}
 
-        del data["updated"]
-        del data["added"]
+        if isinstance(camera_id, str):
+            try:
+                camera_id = uuid.UUID(camera_id)
+            except ValueError:
+                return {"success": False, "error": f"Invalid UUID format: {camera_id}"}
+
+        # Remove timestamp fields safely if present
+        data.pop("updated", None)
+        data.pop("added", None)
 
         # Confirm the camera exists
         stmt = select(Cameras).filter(Cameras.id == camera_id)
@@ -522,8 +532,11 @@ async def edit_camera(session: AsyncSession, data: dict) -> dict:
         if not camera:
             return {"success": False, "error": f"Camera with id {camera_id} not found."}
 
-        if "type" in data:
+        if "type" in data and data["type"]:
             data["type"] = _normalize_camera_type(data["type"])
+
+        if "status" in data and data["status"] not in ("active", "inactive"):
+            data["status"] = "active"
 
         # Add updated timestamp
         data["updated"] = datetime.now(timezone.utc)
@@ -559,6 +572,9 @@ async def delete_cameras(
         elif isinstance(camera_ids, (str, uuid.UUID)):
             camera_ids = [camera_ids]
 
+        if not camera_ids:
+            return {"success": False, "error": "No camera IDs provided."}
+
         parsed_ids = []
         for item in camera_ids:
             if isinstance(item, dict) and "id" in item:
@@ -573,13 +589,6 @@ async def delete_cameras(
 
         if not parsed_ids:
             return {"success": False, "error": "No valid camera IDs provided."}
-
-        stmt = select(Cameras).filter(Cameras.id.in_(parsed_ids))
-        result = await session.execute(stmt)
-        cameras = result.scalars().all()
-
-        if not cameras:
-            return {"success": False, "error": "No cameras with the provided IDs were found."}
 
         stmt = delete(Cameras).where(Cameras.id.in_(parsed_ids))
         await session.execute(stmt)
