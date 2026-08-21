@@ -40,22 +40,24 @@ export const fetchSatellitesList = createAsyncThunk(
   }
 );
 
-// Fetch latest telemetry for a satellite
+// Fetch latest telemetry values for all decoded channels of a satellite
 export const fetchLatestTelemetry = createAsyncThunk(
   'telemetry/fetchLatestTelemetry',
-  async ({ dashboardUid = 'bflu6sloxxslcd', apiUrl = DEFAULT_TELEMETRY_API } = {}, { rejectWithValue }) => {
+  async ({ dashboardUid, apiUrl = DEFAULT_TELEMETRY_API }, { rejectWithValue }) => {
     try {
+      if (!dashboardUid) return { dashboardUid, latest: {} };
       const endpoint = getTelemetryEndpoint(`satellites/${dashboardUid}/latest`, apiUrl);
       const response = await fetch(endpoint);
+      if (!response.ok) {
+        return { dashboardUid, latest: {} };
+      }
       const data = await response.json();
       return {
         dashboardUid,
-        satellite: data.satellite,
-        suid: data.suid,
-        latest: data.latest || {},
+        latest: data.latest || data.data || data || {},
       };
     } catch (err) {
-      return rejectWithValue(err.message);
+      return { dashboardUid, latest: {} };
     }
   }
 );
@@ -63,11 +65,15 @@ export const fetchLatestTelemetry = createAsyncThunk(
 // Fetch history time-series data for a field
 export const fetchTelemetryHistory = createAsyncThunk(
   'telemetry/fetchTelemetryHistory',
-  async ({ dashboardUid = 'bflu6sloxxslcd', field = 'sw_ana_bus_v', from = 'now-2d', to = 'now', apiUrl = DEFAULT_TELEMETRY_API }, { rejectWithValue }) => {
+  async ({ dashboardUid, field = 'sw_ana_bus_v', from = 'now-2d', to = 'now', apiUrl = DEFAULT_TELEMETRY_API }, { rejectWithValue }) => {
     try {
+      if (!dashboardUid) return { dashboardUid, field, points: [] };
       const params = new URLSearchParams({ field, from, to });
       const endpoint = getTelemetryEndpoint(`satellites/${dashboardUid}/history?${params.toString()}`, apiUrl);
       const response = await fetch(endpoint);
+      if (!response.ok) {
+        return { dashboardUid, field, points: [] };
+      }
       const data = await response.json();
       return {
         dashboardUid,
@@ -77,7 +83,7 @@ export const fetchTelemetryHistory = createAsyncThunk(
         points: Array.isArray(data.points) ? data.points : [],
       };
     } catch (err) {
-      return rejectWithValue(err.message);
+      return { dashboardUid, field, points: [] };
     }
   }
 );
@@ -85,14 +91,16 @@ export const fetchTelemetryHistory = createAsyncThunk(
 // Execute custom InfluxQL query
 export const executeInfluxQuery = createAsyncThunk(
   'telemetry/executeInfluxQuery',
-  async ({ dashboardUid = 'bflu6sloxxslcd', query, from = 'now-1d', to = 'now', apiUrl = DEFAULT_TELEMETRY_API }, { rejectWithValue }) => {
+  async ({ dashboardUid, query, from = 'now-1d', to = 'now', apiUrl = DEFAULT_TELEMETRY_API }, { rejectWithValue }) => {
     try {
+      if (!dashboardUid) return {};
       const endpoint = getTelemetryEndpoint(`satellites/${dashboardUid}/query`, apiUrl);
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query, from, to }),
       });
+      if (!response.ok) return {};
       const data = await response.json();
       return data;
     } catch (err) {
@@ -101,20 +109,14 @@ export const executeInfluxQuery = createAsyncThunk(
   }
 );
 
+// Fetch SatNOGS decoded telemetry schema
 export const importSatnogsSchema = createAsyncThunk(
   'telemetry/importSatnogsSchema',
-  async ({ schemaJson }, { rejectWithValue }) => {
+  async ({ noradId }, { rejectWithValue }) => {
     try {
-      const response = await fetch(resolveUrl('/api/telemetry/import-schema'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(schemaJson),
-      });
-      const data = await response.json();
-      if (!data.success) {
-        return rejectWithValue(data.error);
-      }
-      return data.data;
+      const response = await fetch(`https://db.satnogs.org/api/telemetry/${noradId}/`);
+      if (!response.ok) throw new Error('Schema not found');
+      return await response.json();
     } catch (err) {
       return rejectWithValue(err.message);
     }
@@ -123,28 +125,25 @@ export const importSatnogsSchema = createAsyncThunk(
 
 const initialState = {
   apiUrl: DEFAULT_TELEMETRY_API,
-  selectedSatelliteUid: 'bflu6sloxxslcd', // AEPEX default UID
+  selectedSatelliteUid: 'bflu6sloxxslcd', // default UID
   selectedSatelliteTitle: 'AEPEX',
   satellitesList: [
     { dashboardUid: 'bflu6sloxxslcd', title: 'AEPEX', suid: '68506', tags: ['active', 'stable'] },
     { dashboardUid: 'QGujdBBZk', title: 'AAUSAT4', suid: '41460', tags: ['active'] },
     { dashboardUid: 'Abuh9WFHk', title: 'ALSat-1n', suid: '41789', tags: ['active'] },
-    { dashboardUid: 'bfhvxrnomp91ca', title: 'COSMO', suid: '50001', tags: ['active'] },
-    { dashboardUid: '9DnJFFO4z', title: 'Geoscan-Edelveis', suid: '55088', tags: ['active'] },
-    { dashboardUid: 'ffc0ehd32qfpcc', title: 'UMKA-1', suid: '57172', tags: ['active'] },
   ],
   latestMetrics: {},
   historyMetrics: [],
+  fieldHistories: {},
+  rawFrames: [],
   historyField: 'sw_ana_bus_v',
   historyTimeRange: 'now-2d',
-  importedSchema: null,
-  rawFrames: [],
-  gridEditable: false,
   autoRefresh: true,
-  refreshIntervalMs: 5000,
+  gridEditable: false,
   loading: false,
   loadingHistory: false,
   error: null,
+  importedSchema: null,
 };
 
 const telemetrySlice = createSlice({
@@ -197,13 +196,22 @@ const telemetrySlice = createSlice({
     clearTelemetryData(state) {
       state.latestMetrics = {};
       state.historyMetrics = [];
+      state.fieldHistories = {};
       state.rawFrames = [];
     },
   },
   extraReducers: (builder) => {
     builder
       .addCase(fetchSatellitesList.fulfilled, (state, action) => {
-        state.satellitesList = action.payload;
+        const list = Array.isArray(action.payload) ? action.payload : [];
+        state.satellitesList = list;
+        if (list.length > 0) {
+          const currentExists = list.some((s) => s.dashboardUid === state.selectedSatelliteUid);
+          if (!currentExists) {
+            state.selectedSatelliteUid = list[0].dashboardUid;
+            state.selectedSatelliteTitle = list[0].title;
+          }
+        }
       })
       .addCase(fetchLatestTelemetry.pending, (state) => {
         state.loading = true;
@@ -236,6 +244,8 @@ const telemetrySlice = createSlice({
       .addCase(fetchTelemetryHistory.fulfilled, (state, action) => {
         state.loadingHistory = false;
         state.historyMetrics = action.payload.points;
+        if (!state.fieldHistories) state.fieldHistories = {};
+        state.fieldHistories[action.payload.field] = action.payload.points;
       })
       .addCase(fetchTelemetryHistory.rejected, (state, action) => {
         state.loadingHistory = false;
