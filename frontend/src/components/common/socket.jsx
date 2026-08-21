@@ -419,7 +419,7 @@ export const SocketProvider = ({ children }) => {
         const host = window.location.hostname;
         const port = window.location.port;
         const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-        const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+        const base = ((typeof window !== 'undefined' && window.location?.pathname?.startsWith('/groundstationdev')) ? '/groundstationdev' : (import.meta.env.BASE_URL || '/groundstation/')).replace(/\/$/, "");
         const backendURL = `${protocol}://${host}:${port}`;
         console.info("Connecting to backend at", backendURL, "with path", `${base}/socket.io`);
         // Configure manager with increased payload size limits for large Socket.IO messages

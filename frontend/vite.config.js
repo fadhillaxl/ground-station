@@ -9,7 +9,7 @@ export default defineConfig(({ mode }) => {
   const backendHost = process.env.GS_BACKEND_HOST || 'localhost';
 
   return {
-    base: process.env.VITE_BASE_URL || "/groundstation/",
+    base: process.env.VITE_BASE_URL || "./",
     plugins: [react()],
 
     // Define custom environment variables

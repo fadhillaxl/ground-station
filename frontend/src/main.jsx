@@ -393,7 +393,7 @@ const router = createBrowserRouter([
         ],
     },
 ], {
-    basename: import.meta.env.BASE_URL.replace(/\/$/, "")
+    basename: ((typeof window !== 'undefined' && window.location?.pathname?.startsWith('/groundstationdev')) ? '/groundstationdev' : (import.meta.env.BASE_URL || '/groundstation/')).replace(/\/$/, '')
 });
 
 const app = (
