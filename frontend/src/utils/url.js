@@ -9,9 +9,10 @@ export const resolveUrl = (url) => {
     ) {
         return url;
     }
-    const base = import.meta.env.BASE_URL.replace(/\/$/, "");
-    if (base && url.startsWith('/') && !url.startsWith(base + '/')) {
-        return `${base}${url}`;
+    const base = ((typeof window !== 'undefined' && window.location?.pathname?.startsWith('/groundstationdev')) ? '/groundstationdev' : (import.meta.env.BASE_URL || '/groundstation/')).replace(/\/$/, "");
+    const cleanBase = (base === '.' || base === './') ? '' : base;
+    if (cleanBase && url.startsWith('/') && !url.startsWith(cleanBase + '/')) {
+        return `${cleanBase}${url}`;
     }
     return url;
 };

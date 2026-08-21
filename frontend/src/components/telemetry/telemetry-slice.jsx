@@ -1,14 +1,22 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { resolveUrl } from '../../utils/url.js';
 
-export const DEFAULT_TELEMETRY_API = 'http://192.168.55.40:4001';
+export const DEFAULT_TELEMETRY_API = '';
+
+const getTelemetryEndpoint = (path, customApiUrl = '') => {
+  if (customApiUrl && (customApiUrl.startsWith('http://') || customApiUrl.startsWith('https://'))) {
+    return `${customApiUrl.replace(/\/$/, '')}/${path.replace(/^\//, '')}`;
+  }
+  return resolveUrl(`/api/ttnc/${path.replace(/^\//, '')}`);
+};
 
 // Fetch list of satellites from Telemetry API or fallback
 export const fetchSatellitesList = createAsyncThunk(
   'telemetry/fetchSatellitesList',
   async ({ apiUrl = DEFAULT_TELEMETRY_API } = {}, { rejectWithValue }) => {
     try {
-      const response = await fetch(`${apiUrl}/api/satellites`);
+      const endpoint = getTelemetryEndpoint('satellites', apiUrl);
+      const response = await fetch(endpoint);
       const data = await response.json();
       if (data && Array.isArray(data.satellites)) {
         return data.satellites;
@@ -33,7 +41,8 @@ export const fetchLatestTelemetry = createAsyncThunk(
   'telemetry/fetchLatestTelemetry',
   async ({ dashboardUid = 'bflu6sloxxslcd', apiUrl = DEFAULT_TELEMETRY_API } = {}, { rejectWithValue }) => {
     try {
-      const response = await fetch(`${apiUrl}/api/satellites/${dashboardUid}/latest`);
+      const endpoint = getTelemetryEndpoint(`satellites/${dashboardUid}/latest`, apiUrl);
+      const response = await fetch(endpoint);
       const data = await response.json();
       return {
         dashboardUid,
@@ -42,16 +51,6 @@ export const fetchLatestTelemetry = createAsyncThunk(
         latest: data.latest || {},
       };
     } catch (err) {
-      // If external API fails, try local backend proxy fallback
-      try {
-        const fallbackRes = await fetch(resolveUrl(`/api/telemetry/${dashboardUid}/latest`));
-        const fallbackData = await fallbackRes.json();
-        if (fallbackData.success) {
-          return { dashboardUid, latest: fallbackData.data };
-        }
-      } catch (localErr) {
-        // Ignore secondary error
-      }
       return rejectWithValue(err.message);
     }
   }
@@ -63,7 +62,8 @@ export const fetchTelemetryHistory = createAsyncThunk(
   async ({ dashboardUid = 'bflu6sloxxslcd', field = 'sw_ana_bus_v', from = 'now-2d', to = 'now', apiUrl = DEFAULT_TELEMETRY_API }, { rejectWithValue }) => {
     try {
       const params = new URLSearchParams({ field, from, to });
-      const response = await fetch(`${apiUrl}/api/satellites/${dashboardUid}/history?${params.toString()}`);
+      const endpoint = getTelemetryEndpoint(`satellites/${dashboardUid}/history?${params.toString()}`, apiUrl);
+      const response = await fetch(endpoint);
       const data = await response.json();
       return {
         dashboardUid,
@@ -83,7 +83,8 @@ export const executeInfluxQuery = createAsyncThunk(
   'telemetry/executeInfluxQuery',
   async ({ dashboardUid = 'bflu6sloxxslcd', query, from = 'now-1d', to = 'now', apiUrl = DEFAULT_TELEMETRY_API }, { rejectWithValue }) => {
     try {
-      const response = await fetch(`${apiUrl}/api/satellites/${dashboardUid}/query`, {
+      const endpoint = getTelemetryEndpoint(`satellites/${dashboardUid}/query`, apiUrl);
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query, from, to }),

@@ -745,6 +745,66 @@ async def download_decoded_folder(
     )
 
 
+# --- TTNC Telemetry API Backend Proxy ---
+# Proxies requests to upstream Telemetry Server (defaults to http://192.168.55.40:4001)
+# to prevent browser CORS and Private Network Access (PNA) blocks.
+TTNC_UPSTREAM_URL = os.environ.get("TTNC_API_BASE_URL", "http://192.168.55.40:4001").rstrip("/")
+
+
+def _proxy_fetch_sync(target_url: str, method: str = "GET", data: bytes = None, headers: dict = None) -> tuple[int, bytes, str]:
+    import urllib.error
+    import urllib.request
+    req = urllib.request.Request(target_url, data=data, headers=headers or {}, method=method)
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            content_type = resp.headers.get("Content-Type", "application/json")
+            return resp.status, resp.read(), content_type
+    except urllib.error.HTTPError as e:
+        content_type = e.headers.get("Content-Type", "application/json") if e.headers else "application/json"
+        return e.code, e.read(), content_type
+    except Exception as e:
+        import json
+        logger.warning(f"TTNC proxy request to {target_url} failed: {e}")
+        return 502, json.dumps({"error": f"Failed to reach telemetry backend: {str(e)}"}).encode("utf-8"), "application/json"
+
+
+async def proxy_ttnc_request(subpath: str, request: Request) -> Response:
+    query_string = request.url.query
+    target_url = f"{TTNC_UPSTREAM_URL}/{subpath.lstrip('/')}"
+    if query_string:
+        target_url = f"{target_url}?{query_string}"
+
+    body = await request.body() if request.method in ("POST", "PUT", "PATCH") else None
+    headers = {"Accept": "application/json"}
+    if request.headers.get("Content-Type"):
+        headers["Content-Type"] = request.headers.get("Content-Type")
+
+    status_code, content, content_type = await asyncio.to_thread(
+        _proxy_fetch_sync, target_url, request.method, body, headers
+    )
+    return Response(content=content, status_code=status_code, media_type=content_type)
+
+
+@app.get("/api/ttnc/satellites")
+async def ttnc_proxy_satellites(request: Request):
+    return await proxy_ttnc_request("api/satellites", request)
+
+
+@app.get("/api/ttnc/satellites/{dashboard_uid}/latest")
+async def ttnc_proxy_latest(dashboard_uid: str, request: Request):
+    return await proxy_ttnc_request(f"api/satellites/{dashboard_uid}/latest", request)
+
+
+@app.get("/api/ttnc/satellites/{dashboard_uid}/history")
+async def ttnc_proxy_history(dashboard_uid: str, request: Request):
+    return await proxy_ttnc_request(f"api/satellites/{dashboard_uid}/history", request)
+
+
+@app.post("/api/ttnc/satellites/{dashboard_uid}/query")
+async def ttnc_proxy_query(dashboard_uid: str, request: Request):
+    return await proxy_ttnc_request(f"api/satellites/{dashboard_uid}/query", request)
+
+
 # This catch-all route comes AFTER specific API routes
 @app.get("/{full_path:path}")
 async def serve_spa(request: Request, full_path: str):
