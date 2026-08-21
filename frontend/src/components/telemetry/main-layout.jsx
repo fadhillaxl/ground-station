@@ -15,12 +15,12 @@ import { receiveLiveTelemetry } from './telemetry-slice.jsx';
 
 import TtncTopBar from './ttnc-topbar.jsx';
 import MetricCardsIsland from './metric-cards-island.jsx';
-import TelemetryChartIsland from './telemetry-chart-island.jsx';
+import TelemetrySingleChartIsland from './single-chart-island.jsx';
 import DecodedParamsIsland from './decoded-params-island.jsx';
 import RawFrameInspector from './raw-frame-inspector.jsx';
 
 export const gridLayoutStoreName = 'ttnc-layouts';
-const LAYOUT_SCHEMA_VERSION = 1;
+const LAYOUT_SCHEMA_VERSION = 2;
 const SHARED_RESIZE_HANDLES = ['s', 'sw', 'w', 'se', 'nw', 'ne', 'e'];
 
 function loadLayoutsFromLocalStorage() {
@@ -63,34 +63,59 @@ function normalizeLayoutsResizeHandles(layouts) {
 
 const defaultLayouts = {
   lg: [
-    { i: 'metric-cards', x: 0, y: 0, w: 48, h: 23, minH: 10, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
-    { i: 'telemetry-chart', x: 0, y: 23, w: 27, h: 27, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
-    { i: 'decoded-params', x: 27, y: 23, w: 21, h: 27, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
-    { i: 'raw-frames', x: 0, y: 50, w: 48, h: 18, minH: 8, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'metric-cards', x: 0, y: 0, w: 48, h: 22, minH: 10, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'chart-bus-v', x: 0, y: 22, w: 16, h: 22, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'chart-bus-i', x: 16, y: 22, w: 16, h: 22, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'chart-batt-v', x: 32, y: 22, w: 16, h: 22, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'chart-eps-temp', x: 0, y: 44, w: 16, h: 22, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'chart-cdh-temp', x: 16, y: 44, w: 16, h: 22, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'chart-solar-i', x: 32, y: 44, w: 16, h: 22, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'decoded-params', x: 0, y: 66, w: 24, h: 26, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'raw-frames', x: 24, y: 66, w: 24, h: 26, minH: 8, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
   ],
   md: [
-    { i: 'metric-cards', x: 0, y: 0, w: 40, h: 26, minH: 10, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
-    { i: 'telemetry-chart', x: 0, y: 26, w: 40, h: 24, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
-    { i: 'decoded-params', x: 0, y: 50, w: 40, h: 24, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
-    { i: 'raw-frames', x: 0, y: 74, w: 40, h: 18, minH: 8, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'metric-cards', x: 0, y: 0, w: 40, h: 24, minH: 10, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'chart-bus-v', x: 0, y: 24, w: 20, h: 22, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'chart-bus-i', x: 20, y: 24, w: 20, h: 22, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'chart-batt-v', x: 0, y: 46, w: 20, h: 22, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'chart-eps-temp', x: 20, y: 46, w: 20, h: 22, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'chart-cdh-temp', x: 0, y: 68, w: 20, h: 22, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'chart-solar-i', x: 20, y: 68, w: 20, h: 22, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'decoded-params', x: 0, y: 90, w: 40, h: 24, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'raw-frames', x: 0, y: 114, w: 40, h: 20, minH: 8, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
   ],
   sm: [
     { i: 'metric-cards', x: 0, y: 0, w: 24, h: 32, minH: 10, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
-    { i: 'telemetry-chart', x: 0, y: 32, w: 24, h: 22, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
-    { i: 'decoded-params', x: 0, y: 54, w: 24, h: 24, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
-    { i: 'raw-frames', x: 0, y: 78, w: 24, h: 18, minH: 8, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'chart-bus-v', x: 0, y: 32, w: 24, h: 22, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'chart-bus-i', x: 0, y: 54, w: 24, h: 22, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'chart-batt-v', x: 0, y: 76, w: 24, h: 22, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'chart-eps-temp', x: 0, y: 98, w: 24, h: 22, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'chart-cdh-temp', x: 0, y: 120, w: 24, h: 22, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'chart-solar-i', x: 0, y: 142, w: 24, h: 22, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'decoded-params', x: 0, y: 164, w: 24, h: 24, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'raw-frames', x: 0, y: 188, w: 24, h: 18, minH: 8, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
   ],
   xs: [
     { i: 'metric-cards', x: 0, y: 0, w: 8, h: 48, minH: 10, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
-    { i: 'telemetry-chart', x: 0, y: 48, w: 8, h: 24, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
-    { i: 'decoded-params', x: 0, y: 72, w: 8, h: 26, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
-    { i: 'raw-frames', x: 0, y: 98, w: 8, h: 20, minH: 8, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'chart-bus-v', x: 0, y: 48, w: 8, h: 24, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'chart-bus-i', x: 0, y: 72, w: 8, h: 24, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'chart-batt-v', x: 0, y: 96, w: 8, h: 24, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'chart-eps-temp', x: 0, y: 120, w: 8, h: 24, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'chart-cdh-temp', x: 0, y: 144, w: 8, h: 24, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'chart-solar-i', x: 0, y: 168, w: 8, h: 24, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'decoded-params', x: 0, y: 192, w: 8, h: 26, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'raw-frames', x: 0, y: 218, w: 8, h: 20, minH: 8, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
   ],
   xxs: [
     { i: 'metric-cards', x: 0, y: 0, w: 8, h: 54, minH: 10, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
-    { i: 'telemetry-chart', x: 0, y: 54, w: 8, h: 24, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
-    { i: 'decoded-params', x: 0, y: 78, w: 8, h: 26, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
-    { i: 'raw-frames', x: 0, y: 104, w: 8, h: 20, minH: 8, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'chart-bus-v', x: 0, y: 54, w: 8, h: 24, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'chart-bus-i', x: 0, y: 78, w: 8, h: 24, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'chart-batt-v', x: 0, y: 102, w: 8, h: 24, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'chart-eps-temp', x: 0, y: 126, w: 8, h: 24, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'chart-cdh-temp', x: 0, y: 150, w: 8, h: 24, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'chart-solar-i', x: 0, y: 174, w: 8, h: 24, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'decoded-params', x: 0, y: 198, w: 8, h: 26, minH: 12, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
+    { i: 'raw-frames', x: 0, y: 224, w: 8, h: 20, minH: 8, moved: false, static: false, resizeHandles: [...SHARED_RESIZE_HANDLES] },
   ],
 };
 
@@ -127,8 +152,59 @@ const TtncMainLayout = () => {
     <StyledIslandParentNoScrollbar key="metric-cards">
       <MetricCardsIsland gridEditable={isEditing} />
     </StyledIslandParentNoScrollbar>,
-    <StyledIslandParentNoScrollbar key="telemetry-chart">
-      <TelemetryChartIsland gridEditable={isEditing} />
+    <StyledIslandParentNoScrollbar key="chart-bus-v">
+      <TelemetrySingleChartIsland
+        field="sw_ana_bus_v"
+        title="Bus Voltage"
+        unit="V"
+        color="#29b6f6"
+        gridEditable={isEditing}
+      />
+    </StyledIslandParentNoScrollbar>,
+    <StyledIslandParentNoScrollbar key="chart-bus-i">
+      <TelemetrySingleChartIsland
+        field="sw_ana_eps_bus_i"
+        title="EPS Bus Current"
+        unit="A"
+        color="#00e676"
+        gridEditable={isEditing}
+      />
+    </StyledIslandParentNoScrollbar>,
+    <StyledIslandParentNoScrollbar key="chart-batt-v">
+      <TelemetrySingleChartIsland
+        field="sw_ana_bat1_v"
+        title="Battery Voltage"
+        unit="V"
+        color="#ab47bc"
+        gridEditable={isEditing}
+      />
+    </StyledIslandParentNoScrollbar>,
+    <StyledIslandParentNoScrollbar key="chart-eps-temp">
+      <TelemetrySingleChartIsland
+        field="sw_ana_eps_temp"
+        title="EPS Temperature"
+        unit="°C"
+        color="#ff5252"
+        gridEditable={isEditing}
+      />
+    </StyledIslandParentNoScrollbar>,
+    <StyledIslandParentNoScrollbar key="chart-cdh-temp">
+      <TelemetrySingleChartIsland
+        field="sw_ana_cdh_temp"
+        title="CD&H OBC Temperature"
+        unit="°C"
+        color="#ff9800"
+        gridEditable={isEditing}
+      />
+    </StyledIslandParentNoScrollbar>,
+    <StyledIslandParentNoScrollbar key="chart-solar-i">
+      <TelemetrySingleChartIsland
+        field="sw_ana_sa1_i"
+        title="Solar Array Current"
+        unit="mA"
+        color="#ffd54f"
+        gridEditable={isEditing}
+      />
     </StyledIslandParentNoScrollbar>,
     <StyledIslandParentNoScrollbar key="decoded-params">
       <DecodedParamsIsland gridEditable={isEditing} />
