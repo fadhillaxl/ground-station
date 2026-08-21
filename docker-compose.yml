@@ -21,8 +21,12 @@ services:
       # Map host USB devices to the container for SDR hardware detection
       - /dev/bus/usb:/dev/bus/usb
     
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
     environment:
       - GS_ENVIRONMENT=production
+      - TTNC_API_BASE_URL=http://192.168.55.40:4001
       # Configure GNU Radio to use tmpfile-based circular buffers to avoid shared memory limit issues
       - GR_BUFFER_TYPE=vmcirc_mmap_tmpfile
       - PYTHONPATH=/app

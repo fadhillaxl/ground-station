@@ -747,32 +747,54 @@ async def download_decoded_folder(
 
 # --- TTNC Telemetry API Backend Proxy ---
 # Proxies requests to upstream Telemetry Server (defaults to http://192.168.55.40:4001)
-# to prevent browser CORS and Private Network Access (PNA) blocks.
+# with intelligent fallback to host.docker.internal / 172.17.0.1 / localhost to bypass
+# browser CORS, Private Network Access (PNA), and Docker bridge routing issues.
 TTNC_UPSTREAM_URL = os.environ.get("TTNC_API_BASE_URL", "http://192.168.55.40:4001").rstrip("/")
 
 
-def _proxy_fetch_sync(target_url: str, method: str = "GET", data: bytes = None, headers: dict = None) -> tuple[int, bytes, str]:
+def _proxy_fetch_sync(subpath_with_query: str, method: str = "GET", data: bytes = None, headers: dict = None) -> tuple[int, bytes, str]:
+    import json
     import urllib.error
     import urllib.request
-    req = urllib.request.Request(target_url, data=data, headers=headers or {}, method=method)
-    try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            content_type = resp.headers.get("Content-Type", "application/json")
-            return resp.status, resp.read(), content_type
-    except urllib.error.HTTPError as e:
-        content_type = e.headers.get("Content-Type", "application/json") if e.headers else "application/json"
-        return e.code, e.read(), content_type
-    except Exception as e:
-        import json
-        logger.warning(f"TTNC proxy request to {target_url} failed: {e}")
-        return 502, json.dumps({"error": f"Failed to reach telemetry backend: {str(e)}"}).encode("utf-8"), "application/json"
+
+    candidate_bases = [
+        TTNC_UPSTREAM_URL,
+        "http://192.168.55.40:4001",
+        "http://host.docker.internal:4001",
+        "http://172.17.0.1:4001",
+        "http://127.0.0.1:4001",
+    ]
+
+    seen = set()
+    last_error = None
+
+    for base_url in candidate_bases:
+        if not base_url or base_url in seen:
+            continue
+        seen.add(base_url)
+        target_url = f"{base_url.rstrip('/')}/{subpath_with_query.lstrip('/')}"
+        req = urllib.request.Request(target_url, data=data, headers=headers or {}, method=method)
+        try:
+            with urllib.request.urlopen(req, timeout=3) as resp:
+                content_type = resp.headers.get("Content-Type", "application/json")
+                return resp.status, resp.read(), content_type
+        except urllib.error.HTTPError as e:
+            content_type = e.headers.get("Content-Type", "application/json") if e.headers else "application/json"
+            return e.code, e.read(), content_type
+        except Exception as e:
+            last_error = str(e)
+            logger.debug(f"TTNC candidate host failed ({target_url}): {e}")
+            continue
+
+    logger.warning(f"TTNC proxy failed across all candidate hosts for {subpath_with_query}: {last_error}")
+    return 502, json.dumps({"error": f"Failed to reach telemetry backend: {last_error}"}).encode("utf-8"), "application/json"
 
 
 async def proxy_ttnc_request(subpath: str, request: Request) -> Response:
     query_string = request.url.query
-    target_url = f"{TTNC_UPSTREAM_URL}/{subpath.lstrip('/')}"
+    subpath_with_query = subpath.lstrip("/")
     if query_string:
-        target_url = f"{target_url}?{query_string}"
+        subpath_with_query = f"{subpath_with_query}?{query_string}"
 
     body = await request.body() if request.method in ("POST", "PUT", "PATCH") else None
     headers = {"Accept": "application/json"}
@@ -780,7 +802,7 @@ async def proxy_ttnc_request(subpath: str, request: Request) -> Response:
         headers["Content-Type"] = request.headers.get("Content-Type")
 
     status_code, content, content_type = await asyncio.to_thread(
-        _proxy_fetch_sync, target_url, request.method, body, headers
+        _proxy_fetch_sync, subpath_with_query, request.method, body, headers
     )
     return Response(content=content, status_code=status_code, media_type=content_type)
 
