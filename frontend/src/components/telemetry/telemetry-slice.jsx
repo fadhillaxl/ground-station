@@ -4,10 +4,14 @@ import { resolveUrl } from '../../utils/url.js';
 export const DEFAULT_TELEMETRY_API = '';
 
 const getTelemetryEndpoint = (path, customApiUrl = '') => {
-  if (customApiUrl && (customApiUrl.startsWith('http://') || customApiUrl.startsWith('https://'))) {
-    return `${customApiUrl.replace(/\/$/, '')}/${path.replace(/^\//, '')}`;
+  if (
+    !customApiUrl ||
+    customApiUrl.includes('192.168.55.40:4001') ||
+    customApiUrl === 'http://192.168.55.40:4001'
+  ) {
+    return resolveUrl(`/api/ttnc/${path.replace(/^\//, '')}`);
   }
-  return resolveUrl(`/api/ttnc/${path.replace(/^\//, '')}`);
+  return `${customApiUrl.replace(/\/$/, '')}/${path.replace(/^\//, '')}`;
 };
 
 // Fetch list of satellites from Telemetry API or fallback
