@@ -231,7 +231,7 @@ RUN git clone --depth=1 https://github.com/hydrasdr/SoapyHydraSDR.git && \
 
 # Install SDRplay API (prerequisite for SoapySDRPlay3)
 WORKDIR /src
-RUN wget https://www.sdrplay.com/software/SDRplay_RSP_API-Linux-3.15.2.run && \
+RUN wget -O SDRplay_RSP_API-Linux-3.15.2.run "https://sdrplay.com/download/hardware-api-linux/?wpdmdl=1906" && \
     chmod +x SDRplay_RSP_API-Linux-3.15.2.run && \
     ./SDRplay_RSP_API-Linux-3.15.2.run --tar -xvf && \
     ARCH=$(uname -m) && \
