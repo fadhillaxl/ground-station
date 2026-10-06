@@ -12,8 +12,12 @@ def test_is_static_asset_request_expected_prefixes():
     assert is_static_asset_request("groundstation/static/js/app.js")
     assert is_static_asset_request("groundstation/assets/logo.png")
     assert is_static_asset_request("groundstation/favicon.ico")
+    assert is_static_asset_request("groundstationdev/static/js/app.js")
+    assert is_static_asset_request("groundstationdev/assets/logo.png")
+    assert is_static_asset_request("groundstationdev/favicon.ico")
     assert not is_static_asset_request("dashboard")
     assert not is_static_asset_request("groundstation/dashboard")
+    assert not is_static_asset_request("groundstationdev/dashboard")
 
 
 def test_resolve_static_asset_path_rejects_traversal(tmp_path: Path):

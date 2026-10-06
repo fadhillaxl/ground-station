@@ -268,31 +268,33 @@ class StripSubpathMiddleware:
             while "//" in path:
                 path = path.replace("//", "/")
             
-            if path.startswith("/groundstation"):
-                new_path = path[len("/groundstation"):]
-                if not new_path.startswith("/"):
-                    new_path = "/" + new_path
-                while "//" in new_path:
-                    new_path = new_path.replace("//", "/")
-                scope["path"] = new_path
+            # Strip known subpath prefixes (checked longest prefix first to avoid partial truncation)
+            for prefix in ("/groundstationdev", "/groundstation"):
+                if path.startswith(prefix):
+                    new_path = path[len(prefix):]
+                    if not new_path.startswith("/"):
+                        new_path = "/" + new_path
+                    while "//" in new_path:
+                        new_path = new_path.replace("//", "/")
+                    scope["path"] = new_path
+                    break
+            else:
+                scope["path"] = path
                 
-                if "raw_path" in scope:
-                    raw_path = scope["raw_path"].decode("ascii", errors="ignore")
-                    while "//" in raw_path:
-                        raw_path = raw_path.replace("//", "/")
-                    if raw_path.startswith("/groundstation"):
-                        new_raw = raw_path[len("/groundstation"):]
+            if "raw_path" in scope:
+                raw_path = scope["raw_path"].decode("ascii", errors="ignore")
+                while "//" in raw_path:
+                    raw_path = raw_path.replace("//", "/")
+                for prefix in ("/groundstationdev", "/groundstation"):
+                    if raw_path.startswith(prefix):
+                        new_raw = raw_path[len(prefix):]
                         if not new_raw.startswith("/"):
                             new_raw = "/" + new_raw
                         while "//" in new_raw:
                             new_raw = new_raw.replace("//", "/")
                         scope["raw_path"] = new_raw.encode("ascii")
-            else:
-                scope["path"] = path
-                if "raw_path" in scope:
-                    raw_path = scope["raw_path"].decode("ascii", errors="ignore")
-                    while "//" in raw_path:
-                        raw_path = raw_path.replace("//", "/")
+                        break
+                else:
                     scope["raw_path"] = raw_path.encode("ascii")
         await self.app(scope, receive, send)
 
