@@ -556,10 +556,13 @@ const AdminSystemHardwareTabs = React.memo(function AdminSystemHardwareTabs() {
     const location = useLocation();
     const navigate = useNavigate();
 
+    // Resolve the active hardware sub-tab from the current route pathname.
     const resolveHardwareTabFromPath = React.useCallback((pathname) => {
-        if (pathname === "/admin/system/hardware/cameras") return "cameras";
-        if (pathname === "/admin/system/hardware/rotators") return "rotators";
-        if (pathname === "/admin/system/hardware/sdrs") return "sdrs";
+        const normalized = (pathname || "").replace(/\/+$/, "");
+        if (normalized === "/admin/system/hardware/cameras" || normalized.endsWith("/hardware/cameras")) return "cameras";
+        if (normalized === "/admin/system/hardware/rotators" || normalized.endsWith("/hardware/rotators") || normalized.endsWith("/hardware/rotator")) return "rotators";
+        if (normalized === "/admin/system/hardware/rigs" || normalized.endsWith("/hardware/rigs") || normalized.endsWith("/hardware/rig")) return "rigs";
+        if (normalized === "/admin/system/hardware/sdrs" || normalized.endsWith("/hardware/sdrs") || normalized.endsWith("/hardware/sdr")) return "sdrs";
         return "sdrs";
     }, []);
 

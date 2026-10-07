@@ -245,12 +245,27 @@ const router = createBrowserRouter([
                                                 Component: AdminSystemHardwarePage,
                                             },
                                             {
+                                                // Backward-compatible alias for older links/bookmarks.
+                                                path: "rig",
+                                                element: <Navigate to="/admin/system/hardware/rigs" replace />,
+                                            },
+                                            {
                                                 path: "rotators",
                                                 Component: AdminSystemHardwarePage,
                                             },
                                             {
+                                                // Backward-compatible alias for older links/bookmarks.
+                                                path: "rotator",
+                                                element: <Navigate to="/admin/system/hardware/rotators" replace />,
+                                            },
+                                            {
                                                 path: "sdrs",
                                                 Component: AdminSystemHardwarePage,
+                                            },
+                                            {
+                                                // Backward-compatible alias for older links/bookmarks.
+                                                path: "sdr",
+                                                element: <Navigate to="/admin/system/hardware/sdrs" replace />,
                                             },
                                             {
                                                 path: "cameras",
