@@ -142,41 +142,31 @@ class RotatorController:
                 writer.write(b"p\n")
                 await writer.drain()
 
-                # Receive response with timeout
-                response_bytes = await asyncio.wait_for(reader.read(1000), timeout=self.timeout)
+                # Rotctl responses to 'p' typically arrive on two separate newline-delimited lines.
+                # Accumulate lines until both azimuth and elevation (or RPRT code) are received.
+                parts = []
+                while len(parts) < 2:
+                    line_bytes = await asyncio.wait_for(reader.readline(), timeout=self.timeout)
+                    if not line_bytes:
+                        break
+                    line_str = line_bytes.decode("utf-8", errors="replace").strip()
+                    if not line_str:
+                        continue
+                    if line_str.startswith("RPRT"):
+                        error_code = int(line_str.split()[1])
+                        return error_code >= 0
+                    if line_str.startswith("get_pos:"):
+                        line_str = line_str.split(":", 1)[1].strip()
+                    parts.extend(line_str.split())
 
-                response = response_bytes.decode("utf-8", errors="replace").strip()
-
-                # Parse the response (same as before)
-                if not response:
-                    return False
-
-                # Handle different response formats
-                if response.startswith("RPRT"):
-                    error_code = int(response.split()[1])
-                    return error_code >= 0
-
-                elif response.startswith("get_pos:"):
-                    parts = response.split(":")[1].strip().split()
-                    if len(parts) >= 2:
-                        try:
-                            float(parts[0])
-                            float(parts[1])
-                            return True
-                        except ValueError:
-                            return False
-                    return False
-
-                else:
-                    parts = response.split()
-                    if len(parts) >= 2:
-                        try:
-                            float(parts[0])
-                            float(parts[1])
-                            return True
-                        except ValueError:
-                            return False
-                    return False
+                if len(parts) >= 2:
+                    try:
+                        float(parts[0])
+                        float(parts[1])
+                        return True
+                    except ValueError:
+                        return False
+                return False
 
         except (asyncio.TimeoutError, ConnectionRefusedError, OSError) as e:
             # Handle all connection-related errors
