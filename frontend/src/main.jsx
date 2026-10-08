@@ -53,6 +53,7 @@ import CelestialMainLayout from "./components/celestial/main-layout.jsx";
 import WeatherViewer from "./components/WeatherViewer/WeatherViewer.jsx";
 import CctvPage from "./components/cctv/cctv-page.jsx";
 import TtncMainLayout from "./components/telemetry/main-layout.jsx";
+import RascubeMainLayout from "./components/rascube/rascube-main-layout.jsx";
 
 function WeatherViewerRoute() {
     const { decoderId } = useParams();
@@ -92,6 +93,10 @@ const router = createBrowserRouter([
                     {
                         path: "ttnc",
                         Component: TtncMainLayout,
+                    },
+                    {
+                        path: "rascube",
+                        Component: RascubeMainLayout,
                     },
                     {
                         path: "telemetry",

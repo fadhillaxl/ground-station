@@ -22,7 +22,10 @@ import subprocess
 import sys
 from typing import Any, Dict, List, Optional
 
-import gnuradio
+try:
+    import gnuradio
+except ImportError:
+    gnuradio = None
 
 from common.logger import logger
 
@@ -290,7 +293,7 @@ def get_library_versions(use_cache: bool = True) -> Dict[str, Any]:
             "category": "sdr",
             "description": "Software-defined radio framework",
         }
-    else:
+    elif gnuradio is not None:
         # Fallback to Python import
         system_libraries["gnuradio"] = {
             "name": "GNU Radio",

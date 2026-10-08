@@ -24,6 +24,7 @@ import EngineeringIcon from '@mui/icons-material/Engineering';
 import {Satellite03Icon} from "hugeicons-react";
 import SatelliteIcon from '@mui/icons-material/Satellite';
 import SensorsIcon from '@mui/icons-material/Sensors';
+import DeveloperBoardIcon from '@mui/icons-material/DeveloperBoard';
 import MemoryIcon from '@mui/icons-material/Memory';
 import InfoIcon from '@mui/icons-material/Info';
 import GroupWorkIcon from '@mui/icons-material/GroupWork';
@@ -352,6 +353,11 @@ export const getNavigation = ({ isAdmin = false } = {}) => {
             segment: 'ttnc',
             title: i18n.t('ttnc', { ns: 'navigation', defaultValue: 'TTNC' }),
             icon: <SensorsIcon />,
+        },
+        {
+            segment: 'rascube',
+            title: i18n.t('rascube', { ns: 'navigation', defaultValue: 'RASCube' }),
+            icon: <DeveloperBoardIcon />,
         },
         {
             segment: 'files',

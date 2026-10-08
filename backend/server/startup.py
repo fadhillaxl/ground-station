@@ -25,10 +25,13 @@ from common.logger import logger
 from db import AsyncSessionLocal, engine
 from db.migrations import run_migrations
 from db.models import Locations
+from handlers.entities.rascube import router as rascube_router
+from handlers.entities.rascube import set_rascube_socketio
+from handlers.entities.telemetry import router as telemetry_router
+from handlers.entities.telemetry import set_telemetry_socketio
 from observations import events as obs_events
 from observations.events import emit_scheduled_observations_changed as _emit
 from observations.events import set_socketio_instance
-from weather.websocket import set_socketio_instance as set_weather_socketio_instance
 from observations.executor import ObservationExecutor
 from observations.sync import ObservationSchedulerSync
 from pipeline.orchestration.processmanager import process_manager
@@ -50,6 +53,7 @@ from tlesync.persist import load_orbital_sync_state
 from tlesync.state import sync_state_manager
 from tracker.instances import emit_tracker_instances, restore_tracker_instances_from_db
 from tracker.messages import handle_tracker_messages
+from weather.websocket import set_socketio_instance as set_weather_socketio_instance
 
 # Increase payload limits to handle large waterfall PNG images and maintenance uploads.
 Payload.max_decode_packets = 50
@@ -257,6 +261,8 @@ app = FastAPI(
     redoc_url="/api/redoc",
     openapi_url="/api/openapi.json",
 )
+
+
 class StripSubpathMiddleware:
     def __init__(self, app):
         self.app = app
@@ -267,11 +273,11 @@ class StripSubpathMiddleware:
             # Collapse duplicate slashes to prevent reverse proxies from causing double-slash route mismatches
             while "//" in path:
                 path = path.replace("//", "/")
-            
+
             # Strip known subpath prefixes (checked longest prefix first to avoid partial truncation)
             for prefix in ("/groundstationdev", "/groundstation"):
                 if path.startswith(prefix):
-                    new_path = path[len(prefix):]
+                    new_path = path[len(prefix) :]
                     if not new_path.startswith("/"):
                         new_path = "/" + new_path
                     while "//" in new_path:
@@ -280,14 +286,14 @@ class StripSubpathMiddleware:
                     break
             else:
                 scope["path"] = path
-                
+
             if "raw_path" in scope:
                 raw_path = scope["raw_path"].decode("ascii", errors="ignore")
                 while "//" in raw_path:
                     raw_path = raw_path.replace("//", "/")
                 for prefix in ("/groundstationdev", "/groundstation"):
                     if raw_path.startswith(prefix):
-                        new_raw = raw_path[len(prefix):]
+                        new_raw = raw_path[len(prefix) :]
                         if not new_raw.startswith("/"):
                             new_raw = "/" + new_raw
                         while "//" in new_raw:
@@ -299,12 +305,19 @@ class StripSubpathMiddleware:
         await self.app(scope, receive, send)
 
 
-from handlers.entities.telemetry import router as telemetry_router, set_telemetry_socketio
-
 app.include_router(telemetry_router)
 set_telemetry_socketio(sio)
 
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+app.include_router(rascube_router)
+set_rascube_socketio(sio)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.add_middleware(StripSubpathMiddleware)
 
 raw_socket_app = socketio.ASGIApp(sio, other_asgi_app=app)
@@ -754,7 +767,12 @@ async def download_decoded_folder(
 TTNC_UPSTREAM_URL = os.environ.get("TTNC_API_BASE_URL", "http://192.168.55.40:4001").rstrip("/")
 
 
-def _proxy_fetch_sync(subpath_with_query: str, method: str = "GET", data: bytes = None, headers: dict = None) -> tuple[int, bytes, str]:
+def _proxy_fetch_sync(
+    subpath_with_query: str,
+    method: str = "GET",
+    data: Optional[bytes] = None,
+    headers: Optional[dict[str, Any]] = None,
+) -> tuple[int, bytes, str]:
     import json
     import urllib.error
     import urllib.request
@@ -781,15 +799,25 @@ def _proxy_fetch_sync(subpath_with_query: str, method: str = "GET", data: bytes 
                 content_type = resp.headers.get("Content-Type", "application/json")
                 return resp.status, resp.read(), content_type
         except urllib.error.HTTPError as e:
-            content_type = e.headers.get("Content-Type", "application/json") if e.headers else "application/json"
+            content_type = (
+                e.headers.get("Content-Type", "application/json")
+                if e.headers
+                else "application/json"
+            )
             return e.code, e.read(), content_type
         except Exception as e:
             last_error = str(e)
             logger.debug(f"TTNC candidate host failed ({target_url}): {e}")
             continue
 
-    logger.warning(f"TTNC proxy failed across all candidate hosts for {subpath_with_query}: {last_error}")
-    return 502, json.dumps({"error": f"Failed to reach telemetry backend: {last_error}"}).encode("utf-8"), "application/json"
+    logger.warning(
+        f"TTNC proxy failed across all candidate hosts for {subpath_with_query}: {last_error}"
+    )
+    return (
+        502,
+        json.dumps({"error": f"Failed to reach telemetry backend: {last_error}"}).encode("utf-8"),
+        "application/json",
+    )
 
 
 async def proxy_ttnc_request(subpath: str, request: Request) -> Response:
@@ -798,15 +826,18 @@ async def proxy_ttnc_request(subpath: str, request: Request) -> Response:
     if query_string:
         subpath_with_query = f"{subpath_with_query}?{query_string}"
 
-    body = await request.body() if request.method in ("POST", "PUT", "PATCH") else None
-    headers = {"Accept": "application/json"}
-    if request.headers.get("Content-Type"):
-        headers["Content-Type"] = request.headers.get("Content-Type")
+    body: Optional[bytes] = (
+        await request.body() if request.method in ("POST", "PUT", "PATCH") else None
+    )
+    headers: dict[str, str] = {"Accept": "application/json"}
+    content_type = request.headers.get("Content-Type")
+    if content_type:
+        headers["Content-Type"] = content_type
 
-    status_code, content, content_type = await asyncio.to_thread(
+    status_code, content, res_content_type = await asyncio.to_thread(
         _proxy_fetch_sync, subpath_with_query, request.method, body, headers
     )
-    return Response(content=content, status_code=status_code, media_type=content_type)
+    return Response(content=content, status_code=status_code, media_type=res_content_type)
 
 
 @app.get("/api/ttnc/satellites")
@@ -841,9 +872,17 @@ async def serve_spa(request: Request, full_path: str):
             file_path = resolve_static_asset_path(base_dir, full_path)
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid path")
+        if not file_path.is_file():
+            raise HTTPException(status_code=404, detail="Static asset not found")
         return FileResponse(str(file_path))
 
-    return FileResponse(str(base_dir / "index.html"))
+    index_path = base_dir / "index.html"
+    if not index_path.is_file():
+        raise HTTPException(status_code=404, detail="SPA index.html not found")
+    return FileResponse(
+        str(index_path),
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+    )
 
 
 async def init_db():
