@@ -185,11 +185,11 @@ export default function RascubeMainLayout() {
   }, []);
 
   const gridContents = [
-    <StyledIslandParentNoScrollbar key="metric-cards">
+    <StyledIslandParentNoScrollbar key="metric-cards" data-tour="rascube-metrics">
       <RascubeMetricCardsIsland gridEditable={isEditing} />
     </StyledIslandParentNoScrollbar>,
 
-    <StyledIslandParentNoScrollbar key="uplink">
+    <StyledIslandParentNoScrollbar key="uplink" data-tour="rascube-uplink">
       <RascubeUplinkIsland
         gridEditable={isEditing}
         onBlinkLed={webSerial.sendBlinkLed}
@@ -199,14 +199,14 @@ export default function RascubeMainLayout() {
       />
     </StyledIslandParentNoScrollbar>,
 
-    <StyledIslandParentNoScrollbar key="camera">
+    <StyledIslandParentNoScrollbar key="camera" data-tour="rascube-camera">
       <RascubeCameraIsland
         gridEditable={isEditing}
         onTriggerCapture={webSerial.triggerCameraCapture}
       />
     </StyledIslandParentNoScrollbar>,
 
-    <StyledIslandParentNoScrollbar key="charts">
+    <StyledIslandParentNoScrollbar key="charts" data-tour="rascube-charts">
       <RascubeChartsIsland gridEditable={isEditing} />
     </StyledIslandParentNoScrollbar>,
 
@@ -218,17 +218,19 @@ export default function RascubeMainLayout() {
       <RascubeParamsIsland gridEditable={isEditing} />
     </StyledIslandParentNoScrollbar>,
 
-    <StyledIslandParentNoScrollbar key="decoder">
+    <StyledIslandParentNoScrollbar key="decoder" data-tour="rascube-decoder">
       <RascubeDecoderIsland gridEditable={isEditing} />
     </StyledIslandParentNoScrollbar>,
   ];
 
   return (
     <Box sx={{ width: '100%', height: '100%', p: 1.5, boxSizing: 'border-box' }}>
-      <RascubeTopBar
-        webSerial={webSerial}
-        onResetLayout={handleResetLayout}
-      />
+      <div data-tour="rascube-topbar">
+        <RascubeTopBar
+          webSerial={webSerial}
+          onResetLayout={handleResetLayout}
+        />
+      </div>
 
       <div ref={containerRef}>
         {mounted ? (

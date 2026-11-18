@@ -753,16 +753,16 @@ const TrackingLayout = React.memo(function TrackingLayout() {
 
     // pre-make the components
     let gridContents = [
-        <StyledIslandParent key="map">
+        <StyledIslandParent key="map" data-tour="tracking-map-island">
             <TargetViewRouter/>
         </StyledIslandParent>,
-        <StyledIslandParentScrollbar key="info">
+        <StyledIslandParentScrollbar key="info" data-tour="tracking-info-island">
             <TargetInfoIsland/>
         </StyledIslandParentScrollbar>,
-        <StyledIslandParentNoScrollbar key="passes">
+        <StyledIslandParentNoScrollbar key="passes" data-tour="tracking-passes-island">
             <NextPassesIsland/>
         </StyledIslandParentNoScrollbar>,
-        <StyledIslandParentNoScrollbar key="timeline">
+        <StyledIslandParentNoScrollbar key="timeline" data-tour="tracking-timeline-island">
             <SatellitePassTimeline
                 timeWindowHours={nextPassesHours}
                 satelliteName={satelliteName}
@@ -771,13 +771,13 @@ const TrackingLayout = React.memo(function TrackingLayout() {
                 showGeostationarySatellites={true}
             />
         </StyledIslandParentNoScrollbar>,
-        <StyledIslandParentScrollbar key="rotator-control">
+        <StyledIslandParentScrollbar key="rotator-control" data-tour="rotator-panel">
             <RotatorControl/>
         </StyledIslandParentScrollbar>,
-        <StyledIslandParentScrollbar key="rig-control">
+        <StyledIslandParentScrollbar key="rig-control" data-tour="rig-panel">
             <RigControl/>
         </StyledIslandParentScrollbar>,
-        <StyledIslandParentNoScrollbar key="camera">
+        <StyledIslandParentNoScrollbar key="camera" data-tour="tracking-camera-island">
             <TargetCameraIsland/>
         </StyledIslandParentNoScrollbar>,
     ];
@@ -800,7 +800,9 @@ const TrackingLayout = React.memo(function TrackingLayout() {
 
     return (
         <>
-            <TargetSelectorBar/>
+            <div data-tour="target-selector-bar">
+                <TargetSelectorBar/>
+            </div>
             <div ref={containerRef}>
                 {ResponsiveGridLayoutParent}
             </div>

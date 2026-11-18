@@ -487,10 +487,10 @@ const EarthViewLayout = React.memo(function EarthViewLayout() {
 
     // pre-made ResponsiveGridLayout
     let gridContents = [
-        <StyledIslandParent key="map">
+        <StyledIslandParent key="map" data-tour="earthview-map">
             <EarthViewMapContainer handleSetTrackingOnBackend={handleSetTrackingOnBackend}/>
         </StyledIslandParent>,
-        <StyledIslandParentNoScrollbar key="passes">
+        <StyledIslandParentNoScrollbar key="passes" data-tour="earthview-passes">
             <NextPassesGroupIsland/>
         </StyledIslandParentNoScrollbar>,
         <StyledIslandParentNoScrollbar key="sat-info">
@@ -525,7 +525,9 @@ const EarthViewLayout = React.memo(function EarthViewLayout() {
     return (
         <>
             {rotatorSelectionDialog}
-            <SatelliteGroupSelectorBar/>
+            <div data-tour="earthview-group-selector">
+                <SatelliteGroupSelectorBar/>
+            </div>
             <div ref={containerRef}>
                 {ResponsiveGridLayoutParent}
             </div>

@@ -244,6 +244,7 @@ const AdminSatellitesPageLayout = React.memo(function AdminSatellitesPageLayout(
     return (
         <Box sx={{ flexGrow: 1, bgcolor: 'background.paper' }}>
             <AntTabs
+                data-tour="settings-tabs"
                 value={activeTab}
                 onChange={handleTabChange}
                 aria-label={t('tabs.satellites')}
@@ -260,7 +261,9 @@ const AdminSatellitesPageLayout = React.memo(function AdminSatellitesPageLayout(
                     />
                 ))}
             </AntTabs>
-            {children}
+            <Box data-tour="settings-form-content">
+                {children}
+            </Box>
         </Box>
     );
 });
@@ -283,6 +286,7 @@ const AdminSystemPageLayout = React.memo(function AdminSystemPageLayout({ active
     return (
         <Box sx={{ flexGrow: 1, bgcolor: 'background.paper' }}>
             <AntTabs
+                data-tour="settings-tabs"
                 value={activeTab}
                 onChange={handleTabChange}
                 aria-label={t('tabs.settings')}
@@ -299,7 +303,9 @@ const AdminSystemPageLayout = React.memo(function AdminSystemPageLayout({ active
                     />
                 ))}
             </AntTabs>
-            {children}
+            <Box data-tour="settings-form-content">
+                {children}
+            </Box>
         </Box>
     );
 });
@@ -599,6 +605,7 @@ const AdminSystemHardwareTabs = React.memo(function AdminSystemHardwareTabs() {
     return (
         <Box sx={{ flexGrow: 1, bgcolor: 'background.paper' }}>
             <AntTabs
+                data-tour="settings-tabs"
                 value={activeTab}
                 onChange={handleTabChange}
                 aria-label={t('tabs.hardware')}
@@ -612,7 +619,9 @@ const AdminSystemHardwareTabs = React.memo(function AdminSystemHardwareTabs() {
                 <AntTab key="rotators" value="rotators" label={t('tabs.rotators')} />
                 <AntTab key="cameras" value="cameras" label={t('tabs.cameras', { defaultValue: 'Cameras' })} />
             </AntTabs>
-            {content}
+            <Box data-tour="settings-form-content">
+                {content}
+            </Box>
         </Box>
     );
 });

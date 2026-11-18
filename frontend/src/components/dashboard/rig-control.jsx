@@ -726,7 +726,7 @@ const RigControl = React.memo(function RigControl({ trackerId: trackerIdOverride
                 </Grid>
 
                 {/* 1. Rig Selection */}
-                <Grid size={{ xs: 12, sm: 12, md: 12 }} style={{padding: '0.5rem 0.5rem 0rem 0.5rem'}}>
+                <Grid size={{ xs: 12, sm: 12, md: 12 }} style={{padding: '0.5rem 0.5rem 0rem 0.5rem'}} data-tour="rig-config-form">
                     <Grid container direction="row" spacing={1} sx={{ alignItems: 'flex-end' }}>
                         <Grid size="grow">
                             <FormControl disabled={!hasTargets || effectiveRigData['connected'] === true}
@@ -1028,7 +1028,7 @@ const RigControl = React.memo(function RigControl({ trackerId: trackerIdOverride
                 </Grid>
 
 
-                <Grid size={{xs: 12, sm: 12, md: 12}} sx={{pt: 0.5}}>
+                <Grid size={{xs: 12, sm: 12, md: 12}} sx={{pt: 0.5}} data-tour="rig-telemetry-display">
                     <Grid size={{xs: 12, sm: 12, md: 12}} style={{padding: '0rem 0.5rem 0rem 0.5rem'}}>
                         <Grid container direction="column" spacing={1}>
                             {/* VFO 1 Frequency */}
@@ -1082,7 +1082,7 @@ const RigControl = React.memo(function RigControl({ trackerId: trackerIdOverride
                     </Grid>
                 </Grid>
 
-                <Grid size={{ xs: 12, sm: 12, md: 12 }} style={{padding: '0.5rem 0.5rem 0rem 0.5rem'}}>
+                <Grid size={{ xs: 12, sm: 12, md: 12 }} style={{padding: '0.5rem 0.5rem 0rem 0.5rem'}} data-tour="rig-action-buttons">
                     <Grid container direction="row" sx={{
                         justifyContent: "space-between",
                         alignItems: "stretch",

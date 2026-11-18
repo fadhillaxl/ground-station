@@ -61,6 +61,48 @@ const finiteOrNull = (value) => {
     return Number.isFinite(parsed) ? parsed : null;
 };
 
+// Smoothly interpolate AZ/EL values at 60fps between backend telemetry updates
+const useSmoothRotatorPosition = (targetAz, targetEl) => {
+    const safeAz = Number.isFinite(Number(targetAz)) ? Number(targetAz) : 0;
+    const safeEl = Number.isFinite(Number(targetEl)) ? Number(targetEl) : 0;
+    const [displayPos, setDisplayPos] = React.useState({ az: safeAz, el: safeEl });
+    const currentRef = React.useRef({ az: safeAz, el: safeEl });
+
+    React.useEffect(() => {
+        let rafId = null;
+        let lastTs = performance.now();
+
+        const step = (nowTs) => {
+            const dt = Math.min(0.1, (nowTs - lastTs) / 1000);
+            lastTs = nowTs;
+            const cur = currentRef.current;
+            const dAz = safeAz - cur.az;
+            const dEl = safeEl - cur.el;
+
+            if (Math.abs(dAz) < 0.05 && Math.abs(dEl) < 0.05) {
+                currentRef.current = { az: safeAz, el: safeEl };
+                setDisplayPos({ az: safeAz, el: safeEl });
+                return;
+            }
+
+            // Exponential smoothing (~12x/sec convergence rate) for fluid gauge needle motion
+            const factor = Math.min(1, dt * 12);
+            const nextAz = cur.az + dAz * factor;
+            const nextEl = cur.el + dEl * factor;
+            currentRef.current = { az: nextAz, el: nextEl };
+            setDisplayPos({ az: nextAz, el: nextEl });
+            rafId = window.requestAnimationFrame(step);
+        };
+
+        rafId = window.requestAnimationFrame(step);
+        return () => {
+            if (rafId !== null) window.cancelAnimationFrame(rafId);
+        };
+    }, [safeAz, safeEl]);
+
+    return displayPos;
+};
+
 const passTimeMs = (value) => {
     const parsed = new Date(value || '').getTime();
     return Number.isFinite(parsed) ? parsed : null;
@@ -154,6 +196,7 @@ const RotatorControl = React.memo(function RotatorControl({ trackerId: trackerId
     const effectiveSelectedRotator = scopedTrackerView?.selectedRotator ?? selectedRotator;
     const effectiveSelectedTransmitter = scopedTrackerView?.selectedTransmitter ?? selectedTransmitter;
     const effectiveRotatorData = scopedTrackerView?.rotatorData || rotatorData;
+    const smoothPos = useSmoothRotatorPosition(effectiveRotatorData?.az, effectiveRotatorData?.el);
     const effectiveSatelliteData = scopedTrackerView?.satelliteData || satelliteData;
     const effectiveLastRotatorEvent = scopedTrackerView?.lastRotatorEvent ?? lastRotatorEvent;
     const scopedTrackerCommand = (scopedTrackerId && trackerCommandsById?.[scopedTrackerId]) || null;
@@ -508,6 +551,7 @@ const RotatorControl = React.memo(function RotatorControl({ trackerId: trackerId
             <Grid container spacing={{ xs: 0, md: 0 }} columns={{ xs: 12, sm: 12, md: 12 }}>
                 <Grid
                     size={{ xs: 12, sm: 12, md: 12 }}
+                    data-tour="rotator-status-header"
                     sx={{
                         px: 1.5,
                         py: 1.05,
@@ -576,7 +620,7 @@ const RotatorControl = React.memo(function RotatorControl({ trackerId: trackerId
                     </Box>
                 </Grid>
 
-                <Grid size={{ xs: 12, sm: 12, md: 12 }} style={{padding: '0.5rem 0.5rem 0rem 0.5rem'}}>
+                <Grid size={{ xs: 12, sm: 12, md: 12 }} style={{padding: '0.5rem 0.5rem 0rem 0.5rem'}} data-tour="rotator-select-form">
                     <Grid container direction="row" spacing={1} sx={{ alignItems: 'flex-end' }}>
                         <Grid size="grow">
                             <FormControl disabled={!hasTargets || isRotatorSelectionDisabled(effectiveTrackingState)}
@@ -713,13 +757,13 @@ const RotatorControl = React.memo(function RotatorControl({ trackerId: trackerId
 
                     </Grid>
 
-                    <Grid container direction="row" sx={{
+                    <Grid container direction="row" data-tour="rotator-gauges" sx={{
                         justifyContent: "space-between",
                         alignItems: "center",
                     }}>
                         <Grid size="grow" style={{textAlign: 'center'}}>
                             <GaugeAz
-                                az={effectiveRotatorData['az']}
+                                az={smoothPos.az}
                                 limits={[gaugePass?.start_azimuth, gaugePass?.end_azimuth]}
                                 peakAz={gaugePass?.peak_azimuth}
                                 targetCurrentAz={targetCurrentPosition.az}
@@ -730,7 +774,7 @@ const RotatorControl = React.memo(function RotatorControl({ trackerId: trackerId
                         </Grid>
                         <Grid size="grow" style={{textAlign: 'center'}}>
                             <GaugeEl
-                                el={effectiveRotatorData['el']}
+                                el={smoothPos.el}
                                 maxElevation={gaugePass?.peak_altitude}
                                 targetCurrentEl={targetCurrentPosition.el}
                                 hardwareLimits={[effectiveRotatorData['minel'], effectiveRotatorData['maxel']]}
@@ -755,7 +799,7 @@ const RotatorControl = React.memo(function RotatorControl({ trackerId: trackerId
                                 justifyContent: "center"
                             }}
                         >
-                            {effectiveRotatorData['az'].toFixed(1)}°
+                            {smoothPos.az.toFixed(1)}°
                         </Typography>
                         </Grid>
                         <Grid size="grow" style={{textAlign: 'center'}}>
@@ -770,12 +814,12 @@ const RotatorControl = React.memo(function RotatorControl({ trackerId: trackerId
                                 justifyContent: "center"
                             }}
                         >
-                            {effectiveRotatorData['el'].toFixed(1)}°
+                            {smoothPos.el.toFixed(1)}°
                         </Typography>
                         </Grid>
                     </Grid>
 
-                    <Grid container direction="row" sx={{
+                    <Grid container direction="row" data-tour="rotator-nudge-buttons" sx={{
                         justifyContent: "space-between",
                         alignItems: "stretch",
                     }}>
@@ -888,7 +932,7 @@ const RotatorControl = React.memo(function RotatorControl({ trackerId: trackerId
                     </Grid>
                 </Grid>
 
-                <Grid size={{ xs: 12, sm: 12, md: 12 }} style={{padding: '0.5rem 0.5rem 0rem 0.5rem'}}>
+                <Grid size={{ xs: 12, sm: 12, md: 12 }} style={{padding: '0.5rem 0.5rem 0rem 0.5rem'}} data-tour="rotator-connection-actions">
                     <Grid container direction="row" sx={{
                         justifyContent: "space-between",
                         alignItems: "stretch",
@@ -953,7 +997,7 @@ const RotatorControl = React.memo(function RotatorControl({ trackerId: trackerId
                     </Grid>
                 </Grid>
 
-                <Grid size={{xs: 12, sm: 12, md: 12}} style={{padding: '0.5rem 0.5rem 0.5rem'}}>
+                <Grid size={{xs: 12, sm: 12, md: 12}} style={{padding: '0.5rem 0.5rem 0.5rem'}} data-tour="rotator-track-actions">
                     <Grid container direction="row" sx={{
                         justifyContent: "space-between",
                         alignItems: "stretch",

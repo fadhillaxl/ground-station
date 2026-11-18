@@ -32,6 +32,7 @@
     "@toolpad/core": "^0.16.0",
     "cities.json": "^1.1.50",
     "dagre": "^0.8.5",
+    "driver.js": "^1.11.0",
     "hls.js": "^1.6.15",
     "hugeicons-react": "^0.4.0",
     "i18next": "^26.0.3",

@@ -8,7 +8,7 @@ This package provides classes and utilities for controlling Rotators Rigs and SD
 __version__ = "0.1.0"
 
 from .rig import RigController
-from .rotator import RotatorController
+from .rotator import RotatorController, RotctldClient
 from .sdr import SDRController
 
-__all__ = ["RigController", "RotatorController", "SDRController"]
+__all__ = ["RigController", "RotatorController", "RotctldClient", "SDRController"]

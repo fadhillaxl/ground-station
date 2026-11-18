@@ -190,6 +190,10 @@ class RotatorHandler:
 
         try:
             az, el, is_slewing = await anext(position_gen)
+            if self._get_azimuth_mode() == "0_450":
+                az = self._unwrap_overlap_azimuth(float(az))
+            self.tracker.rotator_data["az"] = az
+            self.tracker.rotator_data["el"] = el
             self.tracker.rotator_data["slewing"] = is_slewing
             self.tracker.rotator_command_state.update(
                 {
@@ -389,6 +393,14 @@ class RotatorHandler:
                 self.tracker.rotator_data["parked"] = False
         elif new == "stopped":
             self._reset_slew_state()
+            # Issue hardware halt ('S\n') so an active slew stops immediately when user clicks Stop
+            if self.tracker.rotator_controller is not None and hasattr(
+                self.tracker.rotator_controller, "stop"
+            ):
+                try:
+                    await self.tracker.rotator_controller.stop()
+                except Exception as e:
+                    logger.warning(f"Failed to send stop command to rotator: {e}")
             self.tracker.rotator_data["tracking"] = False
             self.tracker.rotator_data["slewing"] = False
             self.tracker.rotator_data["stopped"] = True

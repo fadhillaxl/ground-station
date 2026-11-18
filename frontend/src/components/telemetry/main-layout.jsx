@@ -149,10 +149,10 @@ const TtncMainLayout = () => {
   }, []);
 
   const gridContents = [
-    <StyledIslandParentNoScrollbar key="metric-cards">
+    <StyledIslandParentNoScrollbar key="metric-cards" data-tour="telemetry-metrics">
       <MetricCardsIsland gridEditable={isEditing} />
     </StyledIslandParentNoScrollbar>,
-    <StyledIslandParentNoScrollbar key="chart-bus-v">
+    <StyledIslandParentNoScrollbar key="chart-bus-v" data-tour="telemetry-charts">
       <TelemetrySingleChartIsland
         field="sw_adcs_analogs_digital_bus_v"
         title="Bus Voltage"
@@ -206,17 +206,19 @@ const TtncMainLayout = () => {
         gridEditable={isEditing}
       />
     </StyledIslandParentNoScrollbar>,
-    <StyledIslandParentNoScrollbar key="decoded-params">
+    <StyledIslandParentNoScrollbar key="decoded-params" data-tour="telemetry-decoded-params">
       <DecodedParamsIsland gridEditable={isEditing} />
     </StyledIslandParentNoScrollbar>,
-    <StyledIslandParentNoScrollbar key="raw-frames">
+    <StyledIslandParentNoScrollbar key="raw-frames" data-tour="telemetry-raw-frames">
       <RawFrameInspector gridEditable={isEditing} />
     </StyledIslandParentNoScrollbar>,
   ];
 
   return (
     <Box sx={{ width: '100%', height: '100%', p: 1.5, boxSizing: 'border-box' }}>
-      <TtncTopBar />
+      <div data-tour="telemetry-topbar">
+        <TtncTopBar />
+      </div>
       <div ref={containerRef}>
         {mounted ? (
           <Responsive

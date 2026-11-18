@@ -966,7 +966,14 @@ class SatelliteTracker:
                         f"interval ({interval_seconds})"
                     )
 
-                remaining_time_to_sleep = max((interval_seconds - loop_duration), 0)
+                # Poll rotator at higher frequency while connected/slewing for real-time AZ/EL motion
+                effective_interval = interval_seconds
+                if self.rotator_data.get("slewing") or self.rotator_command_state.get("in_flight"):
+                    effective_interval = min(interval_seconds, 0.25)
+                elif self.rotator_data.get("connected"):
+                    effective_interval = min(interval_seconds, 0.5)
+
+                remaining_time_to_sleep = max((effective_interval - loop_duration), 0)
 
                 # Clean up data states
                 self.state_manager.cleanup_data_states()

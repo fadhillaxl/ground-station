@@ -284,20 +284,20 @@ const MainLayout = React.memo(function MainLayout() {
     }, [layouts]);
 
     const gridContents = useMemo(() => [
-        <StyledIslandParentScrollbar key="waterfall">
+        <StyledIslandParentScrollbar key="waterfall" data-tour="waterfall-display">
             <MainWaterfallDisplay
                 playbackElapsedSecondsRef={playbackElapsedSecondsRef}
                 playbackRemainingSecondsRef={playbackRemainingSecondsRef}
                 playbackTotalSecondsRef={playbackTotalSecondsRef}
             />
         </StyledIslandParentScrollbar>,
-        <StyledIslandParentScrollbar key="settings">
+        <StyledIslandParentScrollbar key="settings" data-tour="waterfall-settings-form">
             <WaterfallSettings
                 ref={waterfallComponentSettingsRef}
                 playbackRemainingSecondsRef={playbackRemainingSecondsRef}
             />
         </StyledIslandParentScrollbar>,
-        <StyledIslandParentScrollbar key="decoding">
+        <StyledIslandParentScrollbar key="decoding" data-tour="waterfall-decoding-panel">
             <DecodedInsightsIsland />
         </StyledIslandParentScrollbar>,
     ], []);

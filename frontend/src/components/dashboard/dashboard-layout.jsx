@@ -57,6 +57,7 @@ import {
 import {Account, AccountPopoverFooter, AccountPreview, SignOutButton} from "@toolpad/core";
 import {GroundStationLogoGreenBlue} from "../common/dataurl-icons.jsx";
 import {stringAvatar} from "../common/common.jsx";
+import GlobalAppTour from "../common/GlobalAppTour.tsx";
 import Grid from "@mui/material/Grid";
 import BorderColorIcon from '@mui/icons-material/BorderColor';
 import {useEffect, useRef, useState} from "react";
@@ -188,7 +189,7 @@ function DashboardEditor() {
             {isEditing ? (
                 <Stack direction="row" spacing={2}>
                     <Tooltip title={t('layout.done_editing')}>
-                        <IconButton size="small" onClick={handleSaveClick} sx={{
+                        <IconButton size="small" onClick={handleSaveClick} data-tour="toolbar-edit-layout" sx={{
                             width: 40,
                         }}>
                             <CheckIcon color="success"/>
@@ -197,7 +198,7 @@ function DashboardEditor() {
                 </Stack>
             ) : (
                 <Tooltip title={t('layout.edit_layout')}>
-                        <IconButton size="small" onClick={handleEditClick} sx={{
+                        <IconButton size="small" onClick={handleEditClick} data-tour="toolbar-edit-layout" sx={{
                             width: 40,
                         }}>
                             <BorderColorIcon sx={{
@@ -214,7 +215,7 @@ function ToolbarActions() {
     const showLocationSetupDialog = useSelector((state) => state.dashboard.showLocationSetupDialog);
 
     return (
-        <Stack direction="row" sx={{padding: "6px 0px 0px 0px"}}>
+        <Stack direction="row" sx={{padding: "6px 0px 0px 0px"}} data-tour="toolbar-actions">
             <ConnectionStatus />
             {!showLocationSetupDialog && <LocationWarningPopover />}
             <SatelliteInfoPopover />
@@ -1175,7 +1176,7 @@ export default function Layout() {
         <>
             <Toolbar />
             <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                <Box component="nav" role="navigation" aria-label="Main navigation" sx={{ overflow: 'auto', mt: 1, flex: 1 }}>
+                <Box component="nav" role="navigation" aria-label="Main navigation" data-tour="nav-sidebar" sx={{ overflow: 'auto', mt: 1, flex: 1 }}>
                     <List>
                         {navigation.map((item, index) => {
                             if (item.kind === 'header') {
@@ -1212,6 +1213,7 @@ export default function Layout() {
                                         <ListItemButton
                                             onClick={() => handleNavigation(item.segment)}
                                             selected={isActive}
+                                            data-tour={`nav-item-${item.segment}`}
                                             sx={{
                                                 minHeight: 40,
                                                 justifyContent: isExpanded ? 'flex-start' : 'center',
@@ -1260,6 +1262,7 @@ export default function Layout() {
                         <ListItemButton
                             id={userMenuButtonId}
                             onClick={handleOpenUserMenu}
+                            data-tour="user-menu-button"
                             aria-label={`Open user menu for ${username}`}
                             aria-haspopup="menu"
                             aria-controls={userMenuOpen ? userMenuId : undefined}
@@ -1325,6 +1328,7 @@ export default function Layout() {
                         aria-label="toggle drawer"
                         onClick={handleDrawerToggle}
                         edge="start"
+                        data-tour="nav-drawer-toggle"
                         sx={{ mr: 2 }}
                     >
                         {open ? <ChevronLeftIcon /> : <MenuIcon />}
@@ -1531,6 +1535,7 @@ export default function Layout() {
                     can open them without routing to /scheduler first. */}
                 <ObservationFormDialog />
                 <MonitoredSatelliteDialog />
+                <GlobalAppTour />
             </Box>
 
             {/* Location Setup Dialog */}
