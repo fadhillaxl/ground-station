@@ -27,9 +27,11 @@ services:
     environment:
       - GS_ENVIRONMENT=production
       - TTNC_API_BASE_URL=http://192.168.55.40:4001
-      # Connect to manual rigctld running on the host machine (Icom IC-9700 on port 4532)
+      # Connect to manual rigctld running on the host machine (Icom IC-9700 on port 4532 / COM3)
       - RIGCTLD_HOST=host.docker.internal
       - RIGCTLD_PORT=4532
+      - ICOM_RIGCTLD_PORT_DEVICE=COM3
+      - ICOM_AUDIO_PORT_DEVICE=COM4
       # Connect to Direwolf KISS TCP (8001) & AGWPE (8000) on host or direwolf container
       - DIREWOLF_KISS_HOST=host.docker.internal
       - DIREWOLF_KISS_PORT=8001

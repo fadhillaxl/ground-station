@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SSTVDecoder, DecoderStats } from './lib/decoder';
 import { SSTV_MODES } from './lib/constants';
+import { resolveUrl } from '../../utils/url.js';
 
 export type SSTVMode = keyof typeof SSTV_MODES | 'AUTO';
 
@@ -8,6 +9,16 @@ export interface AudioInputDeviceInfo {
   deviceId: string;
   label: string;
   isIcomCodec: boolean;
+  sourceType?: 'server' | 'client_web';
+  comPort?: string;
+  rigctldComPort?: string;
+  sampleRate?: number;
+}
+
+export interface ServerSerialPortInfo {
+  port: string;
+  role: string;
+  recommendedFor?: string;
 }
 
 export interface AudioProcessorState {
@@ -16,9 +27,13 @@ export interface AudioProcessorState {
   error: string | null;
   stats: DecoderStats | null;
   activeDeviceLabel: string | null;
+  inputSourceMode: 'server' | 'client_web';
+  rigctldComPort: string;
+  audioComPort: string;
+  captureBackend: string | null;
 }
 
-const ICOM_CODEC_REGEX = /icom|ic-?9700|usb audio codec|burr-brown|pcm290|usb.*codec|\bcodec\b/i;
+const ICOM_CODEC_REGEX = /icom|ic-?9700|usb audio codec|burr-brown|pcm290|usb.*codec|\bcodec\b|com[34]/i;
 
 export function isIcomAudioDevice(label: string): boolean {
   return ICOM_CODEC_REGEX.test(label || '');
@@ -27,86 +42,179 @@ export function isIcomAudioDevice(label: string): boolean {
 export function useAudioProcessor(mode: SSTVMode = 'AUTO') {
   const [state, setState] = useState<AudioProcessorState>({
     isRecording: false,
-    isSupported: false,
+    isSupported: true,
     error: null,
     stats: null,
-    activeDeviceLabel: null,
+    activeDeviceLabel: '[SERVER • COM4] Icom IC-9700 USB Audio CODEC (rigctld: COM3 → :4532)',
+    inputSourceMode: 'server',
+    rigctldComPort: 'COM3',
+    audioComPort: 'COM4',
+    captureBackend: null,
   });
 
-  const [selectedDeviceId, setSelectedDeviceId] = useState<string>('icom-auto');
-  const [audioDevices, setAudioDevices] = useState<AudioInputDeviceInfo[]>([]);
+  // Default to Server Icom IC-9700 (COM4 Audio + COM3 rigctld) so plugging IC-9700 into the server works out of the box
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string>('server:icom-com4');
+  const [audioDevices, setAudioDevices] = useState<AudioInputDeviceInfo[]>([
+    {
+      deviceId: 'server:icom-com4',
+      label: '[SERVER • COM4] Icom IC-9700 USB Audio CODEC (Server • rigctld: COM3 → :4532)',
+      isIcomCodec: true,
+      sourceType: 'server',
+      comPort: 'COM4',
+      rigctldComPort: 'COM3',
+      sampleRate: 48000,
+    },
+    {
+      deviceId: 'server:alsa-codec',
+      label: '[SERVER • ALSA] Icom IC-9700 plughw:CARD=CODEC,DEV=0 (48000 Hz • rigctld: COM3)',
+      isIcomCodec: true,
+      sourceType: 'server',
+      comPort: 'COM4',
+      rigctldComPort: 'COM3',
+      sampleRate: 48000,
+    },
+  ]);
+  const [serverSerialPorts, setServerSerialPorts] = useState<ServerSerialPortInfo[]>([
+    { port: 'COM3', role: 'rigctld (CAT / CI-V Control • Hamlib Model 3081 → TCP :4532)', recommendedFor: 'rigctld' },
+    { port: 'COM4', role: 'Audio / Data USB Port B (Icom IC-9700 USB Audio CODEC)', recommendedFor: 'audio' },
+    { port: '/dev/ttyUSB0', role: 'Linux USB CI-V Port A (if00 • rigctld -m 3081)', recommendedFor: 'rigctld' },
+    { port: '/dev/ttyUSB1', role: 'Linux USB Port B (if02 • Data / Audio companion)', recommendedFor: 'audio' },
+  ]);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
+  const silentGainRef = useRef<GainNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const decoderRef = useRef<SSTVDecoder | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const processorNodeRef = useRef<ScriptProcessorNode | null>(null);
+  const socketHandlerRef = useRef<((pkt: any) => void) | null>(null);
   const lastStatsUpdateMsRef = useRef<number>(0);
   const lastReportedLineRef = useRef<number>(-1);
   const lastReportedStateRef = useRef<string>('');
 
-  const refreshAudioDevices = useCallback(async (requestPermission = false): Promise<AudioInputDeviceInfo[]> => {
-    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.enumerateDevices) {
-      return [];
-    }
-
-    try {
-      if (requestPermission && typeof navigator.mediaDevices.getUserMedia === 'function') {
-        const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        tempStream.getTracks().forEach((track) => track.stop());
-      }
-
-      const rawDevices = await navigator.mediaDevices.enumerateDevices();
-      const inputs: AudioInputDeviceInfo[] = rawDevices
-        .filter((d) => d.kind === 'audioinput')
-        .map((d, idx) => {
-          const label = d.label || `Audio Input #${idx + 1}`;
-          return {
-            deviceId: d.deviceId,
-            label,
-            isIcomCodec: isIcomAudioDevice(label),
-          };
+  const updateServerPorts = useCallback(
+    async (nextRigCom: string, nextAudioCom: string, nextDeviceId?: string) => {
+      setState((prev) => ({
+        ...prev,
+        rigctldComPort: nextRigCom,
+        audioComPort: nextAudioCom,
+        activeDeviceLabel: `[SERVER • ${nextAudioCom}] Icom IC-9700 USB Audio CODEC (rigctld: ${nextRigCom} → :4532)`,
+      }));
+      try {
+        await fetch(resolveUrl('/api/direwolf/config'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            rigctld_com_port: nextRigCom,
+            audio_com_port: nextAudioCom,
+            device_id: nextDeviceId || selectedDeviceId,
+          }),
         });
+      } catch {
+        // Ignore offline errors during local unit tests
+      }
+    },
+    [selectedDeviceId]
+  );
 
-      setAudioDevices(inputs);
+  const refreshAudioDevices = useCallback(
+    async (requestClientMicPermission = false): Promise<AudioInputDeviceInfo[]> => {
+      const combined: AudioInputDeviceInfo[] = [];
 
-      const icom = inputs.find((d) => d.isIcomCodec);
-      if (icom) {
-        setSelectedDeviceId((prev) => (prev === 'default' || prev === 'icom-auto' ? icom.deviceId : prev));
+      // 1. Always fetch Server-side Icom IC-9700 Audio & COM3/COM4 devices from Backend
+      try {
+        const res = await fetch(resolveUrl('/api/direwolf/devices'));
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data?.audioDevices)) {
+            data.audioDevices.forEach((d: any) => {
+              combined.push({
+                deviceId: String(d.deviceId),
+                label: String(d.label),
+                isIcomCodec: Boolean(d.isIcomCodec),
+                sourceType: 'server',
+                comPort: d.comPort || 'COM4',
+                rigctldComPort: d.rigctldComPort || 'COM3',
+                sampleRate: Number(d.sampleRate || 48000),
+              });
+            });
+          }
+          if (Array.isArray(data?.serialPorts) && data.serialPorts.length > 0) {
+            setServerSerialPorts(data.serialPorts);
+          }
+          if (data?.activeConfig) {
+            setState((prev) => ({
+              ...prev,
+              rigctldComPort: data.activeConfig.rigctldComPort || prev.rigctldComPort,
+              audioComPort: data.activeConfig.audioComPort || prev.audioComPort,
+            }));
+          }
+        }
+      } catch {
+        // Fallback default server presets if backend is unreachable
       }
 
-      return inputs;
-    } catch {
-      return [];
-    }
-  }, []);
+      if (combined.length === 0) {
+        combined.push(
+          {
+            deviceId: 'server:icom-com4',
+            label: `[SERVER • ${state.audioComPort}] Icom IC-9700 USB Audio CODEC (Server • rigctld: ${state.rigctldComPort} → :4532)`,
+            isIcomCodec: true,
+            sourceType: 'server',
+            comPort: state.audioComPort,
+            rigctldComPort: state.rigctldComPort,
+            sampleRate: 48000,
+          },
+          {
+            deviceId: 'server:alsa-codec',
+            label: `[SERVER • ALSA] Icom IC-9700 plughw:CARD=CODEC,DEV=0 (48000 Hz • rigctld: ${state.rigctldComPort})`,
+            isIcomCodec: true,
+            sourceType: 'server',
+            comPort: state.audioComPort,
+            rigctldComPort: state.rigctldComPort,
+            sampleRate: 48000,
+          }
+        );
+      }
+
+      // 2. Optionally enumerate Client Web Browser audio inputs (only request mic permission if user asked for client web)
+      if (typeof navigator !== 'undefined' && navigator.mediaDevices?.enumerateDevices) {
+        try {
+          if (
+            requestClientMicPermission &&
+            !selectedDeviceId.startsWith('server:') &&
+            typeof navigator.mediaDevices.getUserMedia === 'function'
+          ) {
+            const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            tempStream.getTracks().forEach((track) => track.stop());
+          }
+
+          const rawDevices = await navigator.mediaDevices.enumerateDevices();
+          rawDevices
+            .filter((d) => d.kind === 'audioinput')
+            .forEach((d, idx) => {
+              const rawLabel = d.label || `Browser Mic #${idx + 1}`;
+              combined.push({
+                deviceId: d.deviceId || `client:${idx}`,
+                label: `[CLIENT WEB] ${rawLabel}`,
+                isIcomCodec: isIcomAudioDevice(rawLabel),
+                sourceType: 'client_web',
+              });
+            });
+        } catch {
+          // Ignore browser media permission errors when using Server audio
+        }
+      }
+
+      setAudioDevices(combined);
+      return combined;
+    },
+    [selectedDeviceId, state.audioComPort, state.rigctldComPort]
+  );
 
   useEffect(() => {
-    const hasAudioContext = typeof window !== 'undefined' && 'AudioContext' in window;
-    const hasMediaDevices =
-      typeof navigator !== 'undefined' &&
-      navigator.mediaDevices &&
-      typeof navigator.mediaDevices.getUserMedia === 'function';
-
-    setState((prev) => ({
-      ...prev,
-      isSupported: Boolean(hasAudioContext && hasMediaDevices),
-    }));
-
-    if (hasMediaDevices) {
-      void refreshAudioDevices(false);
-      if (typeof navigator.mediaDevices.addEventListener === 'function') {
-        const handleDeviceChange = () => {
-          void refreshAudioDevices(false);
-        };
-        navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
-        return () => {
-          navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
-        };
-      }
-    }
-    return undefined;
+    void refreshAudioDevices(false);
   }, [refreshAudioDevices]);
 
   const calculateSNR = useCallback((): number | null => {
@@ -157,6 +265,15 @@ export function useAudioProcessor(mode: SSTVMode = 'AUTO') {
   }, []);
 
   const stopRecording = useCallback(() => {
+    // Unsubscribe from Server Socket.IO audio stream if active
+    const sock = typeof window !== 'undefined' ? (window as any).__socket : null;
+    if (sock && socketHandlerRef.current) {
+      sock.off('server-audio-pcm', socketHandlerRef.current);
+      socketHandlerRef.current = null;
+    }
+
+    fetch(resolveUrl('/api/direwolf/audio/stop'), { method: 'POST' }).catch(() => {});
+
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
@@ -165,6 +282,11 @@ export function useAudioProcessor(mode: SSTVMode = 'AUTO') {
     if (processorNodeRef.current) {
       processorNodeRef.current.disconnect();
       processorNodeRef.current = null;
+    }
+
+    if (silentGainRef.current) {
+      silentGainRef.current.disconnect();
+      silentGainRef.current = null;
     }
 
     if (analyserRef.current) {
@@ -189,68 +311,18 @@ export function useAudioProcessor(mode: SSTVMode = 'AUTO') {
     setState((prev) => ({
       ...prev,
       isRecording: false,
+      captureBackend: null,
     }));
   }, []);
 
   const startRecording = useCallback(
     async (overrideDeviceId?: string) => {
       try {
-        const hasAudioContext = typeof window !== 'undefined' && 'AudioContext' in window;
-        const hasMediaDevices =
-          typeof navigator !== 'undefined' &&
-          navigator.mediaDevices &&
-          typeof navigator.mediaDevices.getUserMedia === 'function';
-
-        if (!hasAudioContext || !hasMediaDevices) {
-          throw new Error('Web Audio API not supported in this browser');
-        }
-
         const targetChoice = overrideDeviceId ?? selectedDeviceId;
-
-        const baseAudioConstraints: MediaTrackConstraints = {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false,
-        };
-
-        let exactDeviceId: string | undefined;
-        if (targetChoice && targetChoice !== 'default' && targetChoice !== 'icom-auto') {
-          exactDeviceId = targetChoice;
-        } else if (targetChoice === 'icom-auto') {
-          const knownIcom = audioDevices.find((d) => d.isIcomCodec && d.deviceId);
-          if (knownIcom) {
-            exactDeviceId = knownIcom.deviceId;
-          }
-        }
-
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: exactDeviceId
-            ? { ...baseAudioConstraints, deviceId: { exact: exactDeviceId } }
-            : baseAudioConstraints,
-        });
-
-        streamRef.current = stream;
-        const activeTrackLabel = stream.getAudioTracks()[0]?.label || 'Default Audio Input';
-
-        void refreshAudioDevices(false);
-
-        const audioContext = new AudioContext();
-        audioContextRef.current = audioContext;
-
-        const source = audioContext.createMediaStreamSource(stream);
-        const analyser = audioContext.createAnalyser();
-        analyser.fftSize = 2048;
-        analyserRef.current = analyser;
-
-        source.connect(analyser);
+        const isServerSource = targetChoice.startsWith('server:');
 
         const isAutoMode = mode === 'AUTO';
         const initialBaseMode: keyof typeof SSTV_MODES = isAutoMode ? 'ROBOT36' : mode;
-        decoderRef.current = new SSTVDecoder(audioContext.sampleRate, initialBaseMode, isAutoMode);
-        decoderRef.current.start();
-        lastStatsUpdateMsRef.current = 0;
-        lastReportedLineRef.current = -1;
-        lastReportedStateRef.current = '';
 
         const maybeUpdateStats = () => {
           if (!decoderRef.current) return;
@@ -267,6 +339,150 @@ export function useAudioProcessor(mode: SSTVMode = 'AUTO') {
             setState((prev) => ({ ...prev, stats: { ...stats, snr } }));
           }
         };
+
+        // =========================================================================
+        // MODE A: SERVER-SIDE ICOM IC-9700 AUDIO (COM4 Audio + COM3 rigctld)
+        // Does NOT call browser getUserMedia; streams from backend server over Socket.IO
+        // =========================================================================
+        if (isServerSource) {
+          const serverSampleRate = 48000;
+          const hasAudioContext = typeof window !== 'undefined' && 'AudioContext' in window;
+          if (hasAudioContext) {
+            const audioContext = new AudioContext({ sampleRate: serverSampleRate });
+            audioContextRef.current = audioContext;
+            const analyser = audioContext.createAnalyser();
+            analyser.fftSize = 2048;
+            analyserRef.current = analyser;
+
+            const silentGain = audioContext.createGain();
+            silentGain.gain.value = 0.0001;
+            analyser.connect(silentGain);
+            silentGain.connect(audioContext.destination);
+            silentGainRef.current = silentGain;
+          }
+
+          decoderRef.current = new SSTVDecoder(serverSampleRate, initialBaseMode, isAutoMode);
+          decoderRef.current.start();
+          lastStatsUpdateMsRef.current = 0;
+          lastReportedLineRef.current = -1;
+          lastReportedStateRef.current = '';
+
+          const sock = typeof window !== 'undefined' ? (window as any).__socket : null;
+          if (sock) {
+            const handleServerPcm = (pkt: any) => {
+              if (!pkt || !Array.isArray(pkt.samples) || !decoderRef.current) return;
+              const floatSamples = Float32Array.from(pkt.samples);
+              decoderRef.current.processSamples(floatSamples);
+
+              // Feed into Web Audio AnalyserNode so Spectrum, Waveform & Waterfall render live
+              const ctx = audioContextRef.current;
+              const analyser = analyserRef.current;
+              if (ctx && analyser && floatSamples.length > 0) {
+                try {
+                  const buf = ctx.createBuffer(1, floatSamples.length, pkt.sampleRate || serverSampleRate);
+                  buf.copyToChannel(floatSamples, 0);
+                  const src = ctx.createBufferSource();
+                  src.buffer = buf;
+                  src.connect(analyser);
+                  src.start();
+                } catch {
+                  // Ignore AudioContext scheduling errors
+                }
+              }
+
+              maybeUpdateStats();
+            };
+
+            socketHandlerRef.current = handleServerPcm;
+            sock.on('server-audio-pcm', handleServerPcm);
+          }
+
+          const res = await fetch(resolveUrl('/api/direwolf/audio/start'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              device_id: targetChoice,
+              rigctld_com_port: state.rigctldComPort,
+              audio_com_port: state.audioComPort,
+              sample_rate: serverSampleRate,
+            }),
+          });
+          const data = await res.json().catch(() => ({}));
+          const serverInfo = data?.status?.serverAudio;
+
+          const matchedDev = audioDevices.find((d) => d.deviceId === targetChoice);
+          const activeLabel =
+            serverInfo?.deviceLabel ||
+            matchedDev?.label ||
+            `[SERVER • ${state.audioComPort}] Icom IC-9700 USB Audio CODEC (rigctld: ${state.rigctldComPort} → :4532)`;
+
+          setState((prev) => ({
+            ...prev,
+            isRecording: true,
+            inputSourceMode: 'server',
+            error: null,
+            activeDeviceLabel: activeLabel,
+            captureBackend: serverInfo?.captureBackend || 'Server USB Audio CODEC',
+            stats: decoderRef.current ? { ...decoderRef.current.getStats(), snr: null } : null,
+          }));
+          return;
+        }
+
+        // =========================================================================
+        // MODE B: CLIENT WEB BROWSER MICROPHONE (navigator.mediaDevices.getUserMedia)
+        // =========================================================================
+        const hasAudioContext = typeof window !== 'undefined' && 'AudioContext' in window;
+        const hasMediaDevices =
+          typeof navigator !== 'undefined' &&
+          navigator.mediaDevices &&
+          typeof navigator.mediaDevices.getUserMedia === 'function';
+
+        if (!hasAudioContext || !hasMediaDevices) {
+          throw new Error('Web Audio API not supported in this browser');
+        }
+
+        const baseAudioConstraints: MediaTrackConstraints = {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+        };
+
+        let exactDeviceId: string | undefined;
+        if (targetChoice && targetChoice !== 'default' && targetChoice !== 'icom-auto') {
+          exactDeviceId = targetChoice;
+        } else if (targetChoice === 'icom-auto') {
+          const knownIcom = audioDevices.find(
+            (d) => d.sourceType === 'client_web' && d.isIcomCodec && d.deviceId
+          );
+          if (knownIcom) {
+            exactDeviceId = knownIcom.deviceId;
+          }
+        }
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: exactDeviceId
+            ? { ...baseAudioConstraints, deviceId: { exact: exactDeviceId } }
+            : baseAudioConstraints,
+        });
+
+        streamRef.current = stream;
+        const activeTrackLabel = `[CLIENT WEB] ${stream.getAudioTracks()[0]?.label || 'Default Browser Audio'}`;
+
+        const audioContext = new AudioContext();
+        audioContextRef.current = audioContext;
+
+        const source = audioContext.createMediaStreamSource(stream);
+        const analyser = audioContext.createAnalyser();
+        analyser.fftSize = 2048;
+        analyserRef.current = analyser;
+
+        source.connect(analyser);
+
+        decoderRef.current = new SSTVDecoder(audioContext.sampleRate, initialBaseMode, isAutoMode);
+        decoderRef.current.start();
+        lastStatsUpdateMsRef.current = 0;
+        lastReportedLineRef.current = -1;
+        lastReportedStateRef.current = '';
 
         let useScriptProcessor = false;
         try {
@@ -296,6 +512,7 @@ export function useAudioProcessor(mode: SSTVMode = 'AUTO') {
           silentGain.gain.value = 0.001;
           analyser.connect(silentGain);
           silentGain.connect(audioContext.destination);
+          silentGainRef.current = silentGain;
 
           const pollAudio = () => {
             if (!analyserRef.current || !decoderRef.current) {
@@ -318,8 +535,10 @@ export function useAudioProcessor(mode: SSTVMode = 'AUTO') {
         setState((prev) => ({
           ...prev,
           isRecording: true,
+          inputSourceMode: 'client_web',
           error: null,
           activeDeviceLabel: activeTrackLabel,
+          captureBackend: 'Browser Web Audio',
           stats: decoderRef.current ? { ...decoderRef.current.getStats(), snr: null } : null,
         }));
       } catch (err) {
@@ -331,7 +550,7 @@ export function useAudioProcessor(mode: SSTVMode = 'AUTO') {
         }));
       }
     },
-    [audioDevices, calculateSNR, mode, refreshAudioDevices, selectedDeviceId]
+    [audioDevices, calculateSNR, mode, selectedDeviceId, state.audioComPort, state.rigctldComPort]
   );
 
   const resetDecoder = useCallback(() => {
@@ -375,8 +594,10 @@ export function useAudioProcessor(mode: SSTVMode = 'AUTO') {
   return {
     state,
     audioDevices,
+    serverSerialPorts,
     selectedDeviceId,
     setSelectedDeviceId,
+    updateServerPorts,
     refreshAudioDevices,
     startRecording,
     stopRecording,

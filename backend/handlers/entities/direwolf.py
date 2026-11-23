@@ -126,3 +126,44 @@ async def simulate_satellite_presets() -> dict[str, Any]:
         "packets": packets,
         "status": service.get_status_dict(),
     }
+
+
+@router.get("/devices")
+async def get_direwolf_server_devices() -> dict[str, Any]:
+    """Return server-side audio input devices and serial COM ports (COM3 rigctld / COM4 audio)."""
+    return service.discover_server_devices()
+
+
+@router.post("/config")
+async def update_direwolf_server_config(
+    payload: dict[str, Any] = Body(...),
+) -> dict[str, Any]:
+    """Update server-side Icom IC-9700 port mapping (e.g., COM3 for rigctld, COM4 for audio)."""
+    status = await service.update_server_config(
+        rigctld_com_port=payload.get("rigctld_com_port") or payload.get("rigctldComPort"),
+        audio_com_port=payload.get("audio_com_port") or payload.get("audioComPort"),
+        device_id=payload.get("device_id") or payload.get("deviceId"),
+        input_source_mode=payload.get("input_source_mode") or payload.get("inputSourceMode"),
+    )
+    return {"success": True, "status": status}
+
+
+@router.post("/audio/start")
+async def start_direwolf_server_audio(
+    payload: dict[str, Any] = Body(default={}),
+) -> dict[str, Any]:
+    """Start capturing audio from the Server Icom IC-9700 (COM4 / USB Audio CODEC) and stream to UI."""
+    status = await service.start_server_audio_stream(
+        device_id=payload.get("device_id") or payload.get("deviceId"),
+        rigctld_com_port=payload.get("rigctld_com_port") or payload.get("rigctldComPort"),
+        audio_com_port=payload.get("audio_com_port") or payload.get("audioComPort"),
+        sample_rate=int(payload.get("sample_rate") or payload.get("sampleRate") or 48000),
+    )
+    return {"success": True, "status": status}
+
+
+@router.post("/audio/stop")
+async def stop_direwolf_server_audio() -> dict[str, Any]:
+    """Stop server-side Icom IC-9700 audio stream."""
+    status = await service.stop_server_audio_stream()
+    return {"success": True, "status": status}

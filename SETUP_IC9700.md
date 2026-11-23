@@ -8,9 +8,13 @@ Dokumen ini menjelaskan langkah konfigurasi integrasi radio **Icom IC-9700** den
 
 ## 1. Menjalankan `rigctld` Secara Manual di Mesin Host (Port `4532`)
 
-Ketika Icom IC-9700 dihubungkan ke server melalui kabel USB, sistem operasi Linux akan membuat dua perangkat serial (`/dev/ttyUSBx` atau `/dev/ttyACMx`):
-- **`if00` (Port A)**: Digunakan untuk kontrol CAT / CI-V (`rigctld`).
-- **`if02` (Port B)**: Cadangan (GPS/DV data).
+Ketika Icom IC-9700 dihubungkan ke server melalui kabel USB, sistem operasi akan membuat dua port serial virtual serta satu kartu suara **USB Audio CODEC**:
+- **Pada Windows / Server dengan mapping COM**:
+  - **`COM3` (Port A / CI-V)**: Digunakan untuk kontrol CAT / CI-V (`rigctld -m 3081 -r COM3 -s 115200 -T 0.0.0.0 -t 4532`).
+  - **`COM4` (Port B / Audio & Data)**: Digunakan untuk jalur Audio / Data bersama **USB Audio CODEC** (`48000 Hz`).
+- **Pada Linux**:
+  - **`if00` (`/dev/ttyUSB0`)**: Digunakan untuk kontrol CAT / CI-V (`rigctld`).
+  - **`if02` (`/dev/ttyUSB1`)**: Port B (GPS/DV data) bersama kartu suara ALSA `plughw:CARD=CODEC,DEV=0`.
 
 ### A. Cek Path Device USB Icom IC-9700
 Jalankan perintah berikut di terminal mesin host:

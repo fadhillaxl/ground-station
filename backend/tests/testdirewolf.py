@@ -219,6 +219,42 @@ def test_direwolf_api_endpoints():
     assert status_json["kiss"]["port"] == 8001
     assert status_json["stats"]["totalPackets"] == 3
 
+    # 5. Server devices and COM3 / COM4 configuration endpoints
+    res_devs = client.get("/api/direwolf/devices")
+    assert res_devs.status_code == 200
+    devs_json = res_devs.json()
+    assert any(d["deviceId"] == "server:icom-com4" for d in devs_json["audioDevices"])
+    assert any(p["port"] == "COM3" for p in devs_json["serialPorts"])
+    assert any(p["port"] == "COM4" for p in devs_json["serialPorts"])
+
+    res_cfg = client.post(
+        "/api/direwolf/config",
+        json={
+            "rigctld_com_port": "COM3",
+            "audio_com_port": "COM4",
+            "device_id": "server:icom-com4",
+        },
+    )
+    assert res_cfg.status_code == 200
+    assert res_cfg.json()["status"]["serverAudio"]["rigctldComPort"] == "COM3"
+    assert res_cfg.json()["status"]["serverAudio"]["audioComPort"] == "COM4"
+
+    res_start = client.post(
+        "/api/direwolf/audio/start",
+        json={
+            "device_id": "server:icom-com4",
+            "rigctld_com_port": "COM3",
+            "audio_com_port": "COM4",
+            "sample_rate": 48000,
+        },
+    )
+    assert res_start.status_code == 200
+    assert res_start.json()["status"]["serverAudio"]["streaming"] is True
+
+    res_stop = client.post("/api/direwolf/audio/stop")
+    assert res_stop.status_code == 200
+    assert res_stop.json()["status"]["serverAudio"]["streaming"] is False
+
 
 @pytest.mark.asyncio
 async def test_direwolf_kiss_tcp_stream_and_readonly_rigctld_probe():

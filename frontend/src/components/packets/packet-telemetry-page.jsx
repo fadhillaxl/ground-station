@@ -56,6 +56,7 @@ import {
     fetchDirewolfPackets,
     clearDirewolfPackets,
     simulateDirewolfPresets,
+    updateDirewolfServerConfig,
     receiveLivePacket,
     receiveDirewolfStatus,
     receivePacketsCleared,
@@ -320,6 +321,8 @@ export default function PacketTelemetryPage() {
     const rigHost = status?.rigctld?.host || 'host.docker.internal';
     const rigPort = status?.rigctld?.port || 4532;
     const rigLatency = status?.rigctld?.latencyMs;
+    const rigComPort = status?.serverAudio?.rigctldComPort || status?.rigctld?.comPort || 'COM3';
+    const audioComPort = status?.serverAudio?.audioComPort || 'COM4';
 
     const totalPackets = status?.stats?.totalPackets ?? packets.length;
     const ch0Count = status?.stats?.channel0Packets1200 ?? packets.filter((p) => p.channel === 0).length;
@@ -394,13 +397,56 @@ export default function PacketTelemetryPage() {
                             </Tooltip>
                         </Stack>
                         <Typography variant="caption" color="text.secondary">
-                            Icom IC-9700 USB Audio CODEC (48000 Hz) • Ch 0: 1200 bps AFSK • Ch 1: 9600 bps FSK/GFSK • PTT RIG 2 ({rigHost}:{rigPort})
+                            Server Icom IC-9700 ({rigComPort} rigctld → :{rigPort} • {audioComPort} USB Audio CODEC 48000 Hz) • Ch 0: 1200 bps • Ch 1: 9600 bps
                         </Typography>
                     </Box>
                 </Stack>
 
-                {/* Controls: Channel Filter, ASCII/HEX Toggle, Simulate, Clear, Export */}
+                {/* Controls: Server COM Ports (COM3 / COM4), Channel Filter, ASCII/HEX Toggle, Simulate, Clear, Export */}
                 <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                    <FormControl size="small" sx={{ minWidth: 125 }}>
+                        <InputLabel id="direwolf-rig-com-label">rigctld (Server)</InputLabel>
+                        <Select
+                            labelId="direwolf-rig-com-label"
+                            value={rigComPort}
+                            label="rigctld (Server)"
+                            onChange={(e) =>
+                                dispatch(
+                                    updateDirewolfServerConfig({
+                                        rigctldComPort: e.target.value,
+                                        audioComPort,
+                                    })
+                                )
+                            }
+                        >
+                            <MenuItem value="COM3">COM3 (CAT :4532)</MenuItem>
+                            <MenuItem value="COM4">COM4 (CAT :4532)</MenuItem>
+                            <MenuItem value="/dev/ttyUSB0">/dev/ttyUSB0</MenuItem>
+                            <MenuItem value="/dev/ttyUSB1">/dev/ttyUSB1</MenuItem>
+                        </Select>
+                    </FormControl>
+
+                    <FormControl size="small" sx={{ minWidth: 125 }}>
+                        <InputLabel id="direwolf-audio-com-label">Audio (Server)</InputLabel>
+                        <Select
+                            labelId="direwolf-audio-com-label"
+                            value={audioComPort}
+                            label="Audio (Server)"
+                            onChange={(e) =>
+                                dispatch(
+                                    updateDirewolfServerConfig({
+                                        rigctldComPort: rigComPort,
+                                        audioComPort: e.target.value,
+                                    })
+                                )
+                            }
+                        >
+                            <MenuItem value="COM4">COM4 (USB Audio)</MenuItem>
+                            <MenuItem value="COM3">COM3 (USB Audio)</MenuItem>
+                            <MenuItem value="plughw:CARD=CODEC,DEV=0">ALSA CODEC</MenuItem>
+                            <MenuItem value="/dev/ttyUSB1">/dev/ttyUSB1</MenuItem>
+                        </Select>
+                    </FormControl>
                     <FormControl size="small" sx={{ minWidth: 165 }}>
                         <InputLabel id="direwolf-channel-filter-label">Demod Channel</InputLabel>
                         <Select

@@ -36,7 +36,12 @@ describe('SstvPage (Dynamic Waterfall-style Grid Layout + smolgroot DSP engine)'
         expect(screen.getByText(/SSTV Live Decoder/i)).toBeTruthy();
         expect(screen.getByText('Settings')).toBeTruthy();
         expect(screen.getByText('Audio Source (IC-9700)')).toBeTruthy();
-        expect(screen.getByText('Icom IC-9700 (USB Audio CODEC — Auto Detect)')).toBeTruthy();
+        expect(
+            screen.getByText(
+                /\[SERVER • COM4\] Icom IC-9700 USB Audio CODEC \(Server • rigctld: COM3\)/i
+            )
+        ).toBeTruthy();
+        expect(screen.getByText('SERVER ICOM IC-9700 USB PORTS')).toBeTruthy();
         expect(screen.getAllByText('Auto Detect (SSTV Signal)').length).toBeGreaterThan(0);
         expect(screen.getByText('Audio Analysis')).toBeTruthy();
         expect(screen.getByText('Waveform & Spectrum')).toBeTruthy();

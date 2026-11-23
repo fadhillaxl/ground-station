@@ -16,12 +16,22 @@ const initialState = {
             connected: false,
             host: 'host.docker.internal',
             port: 4532,
+            comPort: 'COM3',
             latencyMs: null,
             lastCheckedAt: null,
             radioModel: 'Icom IC-9700',
             hamlibModelId: 3081,
             pttMethod: 'RIG 2 (Hamlib NET rigctl)',
             readOnlyMonitor: true,
+        },
+        serverAudio: {
+            inputSourceMode: 'server',
+            rigctldComPort: 'COM3',
+            audioComPort: 'COM4',
+            deviceId: 'server:icom-com4',
+            deviceLabel: '[SERVER • COM4] Icom IC-9700 USB Audio CODEC (rigctld: COM3 → :4532)',
+            sampleRate: 48000,
+            streaming: false,
         },
         stats: {
             totalPackets: 0,
@@ -89,6 +99,27 @@ export const simulateDirewolfPresets = createAsyncThunk(
         try {
             const res = await fetch(resolveUrl('/api/direwolf/simulate/presets'), {
                 method: 'POST',
+            });
+            if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+            return await res.json();
+        } catch (err) {
+            return rejectWithValue(err.message);
+        }
+    }
+);
+
+export const updateDirewolfServerConfig = createAsyncThunk(
+    'packets/updateServerConfig',
+    async ({ rigctldComPort, audioComPort, deviceId }, { rejectWithValue }) => {
+        try {
+            const res = await fetch(resolveUrl('/api/direwolf/config'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    rigctld_com_port: rigctldComPort,
+                    audio_com_port: audioComPort,
+                    device_id: deviceId,
+                }),
             });
             if (!res.ok) throw new Error(`HTTP error ${res.status}`);
             return await res.json();
@@ -201,6 +232,11 @@ const packetsSlice = createSlice({
             .addCase(simulateDirewolfPresets.rejected, (state, action) => {
                 state.simulating = false;
                 state.error = action.payload || 'Failed to run satellite packet simulation';
+            })
+            .addCase(updateDirewolfServerConfig.fulfilled, (state, action) => {
+                if (action.payload?.status) {
+                    state.status = { ...state.status, ...action.payload.status };
+                }
             });
     },
 });
