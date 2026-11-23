@@ -7,7 +7,7 @@ Sample production config:
 Before use:
 
 1. Replace `server_name` and certificate paths.
-2. Ensure Ground Station is reachable at `127.0.0.1:7000` (or adjust upstream).
+2. Ensure Ground Station is reachable at `127.0.0.1:7000` (or adjust upstream) and the SSTV Webtop/QSSTV service is reachable at `127.0.0.1:7002` for `/sstv/`.
 3. Keep these forwarded headers:
    - `X-Forwarded-Proto`
    - `X-Forwarded-Host`

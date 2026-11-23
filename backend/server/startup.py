@@ -25,6 +25,9 @@ from common.logger import logger
 from db import AsyncSessionLocal, engine
 from db.migrations import run_migrations
 from db.models import Locations
+from direwolf.service import service as direwolf_service
+from handlers.entities.direwolf import router as direwolf_router
+from handlers.entities.direwolf import set_direwolf_socketio
 from handlers.entities.rascube import router as rascube_router
 from handlers.entities.rascube import set_rascube_socketio
 from handlers.entities.telemetry import router as telemetry_router
@@ -219,10 +222,14 @@ async def lifespan(fastapiapp: FastAPI):
     # Start session runtime snapshot emitter task (registers into background_tasks)
     start_session_runtime_emitter(sio, background_tasks)
 
+    # Start Direwolf KISS TCP auto-reconnect client (port 8001) & read-only rigctld probe (port 4532)
+    direwolf_service.start_background_tasks(background_tasks)
+
     try:
         yield
     finally:
         logger.info("FastAPI lifespan cleanup...")
+        await direwolf_service.stop_background_tasks()
         # Shutdown background task manager
         if background_task_manager:
             await background_task_manager.shutdown()
@@ -310,6 +317,9 @@ set_telemetry_socketio(sio)
 
 app.include_router(rascube_router)
 set_rascube_socketio(sio)
+
+app.include_router(direwolf_router)
+set_direwolf_socketio(sio)
 
 app.add_middleware(
     CORSMiddleware,

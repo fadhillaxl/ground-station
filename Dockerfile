@@ -540,6 +540,9 @@ WORKDIR /app
 # Copy backend code
 COPY backend/ ./backend/
 
+# Copy Nginx reverse proxy configuration templates
+COPY deploy/nginx/ ./deploy/nginx/
+
 # Copy and set permissions for startup script
 COPY backend/startup.sh /app/startup.sh
 RUN chmod +x /app/startup.sh

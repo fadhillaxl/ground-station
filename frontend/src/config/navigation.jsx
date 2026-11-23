@@ -23,7 +23,9 @@ import GpsFixedIcon from '@mui/icons-material/GpsFixed';
 import EngineeringIcon from '@mui/icons-material/Engineering';
 import {Satellite03Icon} from "hugeicons-react";
 import SatelliteIcon from '@mui/icons-material/Satellite';
+import ImageIcon from '@mui/icons-material/Image';
 import SensorsIcon from '@mui/icons-material/Sensors';
+import RouterIcon from '@mui/icons-material/Router';
 import DeveloperBoardIcon from '@mui/icons-material/DeveloperBoard';
 import MemoryIcon from '@mui/icons-material/Memory';
 import InfoIcon from '@mui/icons-material/Info';
@@ -348,6 +350,16 @@ export const getNavigation = ({ isAdmin = false } = {}) => {
             segment: 'weather',
             title: i18n.t('weather_decoder', { ns: 'navigation', defaultValue: 'Weather Decoder' }),
             icon: <SatelliteIcon />,
+        },
+        {
+            segment: 'sstv-decoder',
+            title: i18n.t('sstv_decoder', { ns: 'navigation', defaultValue: 'SSTV' }),
+            icon: <ImageIcon />,
+        },
+        {
+            segment: 'packets',
+            title: i18n.t('packet_telemetry', { ns: 'navigation', defaultValue: 'Packet & Telemetry' }),
+            icon: <RouterIcon />,
         },
         {
             segment: 'ttnc',

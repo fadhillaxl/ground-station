@@ -11,6 +11,8 @@
   "tracking_console": "Tracking console",
   "ttnc": "TTNC",
   "rascube": "RASCube",
+  "sstv_decoder": "SSTV",
+  "packet_telemetry": "Packet & Telemetry",
   "files": "Files",
   "scheduler": "Scheduler",
   "waterfall_view": "Waterfall view",

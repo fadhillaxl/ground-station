@@ -6,6 +6,8 @@
   "waterfall_view": "Vue cascade",
   "ttnc": "TTNC",
   "rascube": "RASCube",
+  "sstv_decoder": "SSTV",
+  "packet_telemetry": "Packet & Telemetry",
   "hardware": "Matériel",
   "rigs": "Radios",
   "rotators": "Rotateurs",

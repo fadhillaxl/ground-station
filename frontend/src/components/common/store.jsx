@@ -56,6 +56,7 @@ import celestialDisplayReducer from '../celestial/celestial-display-slice.jsx';
 import authReducer from '../auth/auth-slice.jsx';
 import telemetryReducer from '../telemetry/telemetry-slice.jsx';
 import rascubeReducer from '../rascube/rascube-slice.jsx';
+import packetsReducer from '../packets/packets-slice.jsx';
 import backendSyncMiddleware from '../waterfall/vfo-marker/vfo-middleware.jsx';
 
 const storage = storageEngine?.default ?? storageEngine;
@@ -462,6 +463,7 @@ export const store = configureStore({
         auth: persistedAuthReducer,
         telemetry: telemetryReducer,
         rascube: rascubeReducer,
+        packets: packetsReducer,
     },
     devTools: process.env.NODE_ENV !== "production",
     middleware: (getDefaultMiddleware) =>

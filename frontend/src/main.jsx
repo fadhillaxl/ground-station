@@ -54,6 +54,8 @@ import WeatherViewer from "./components/WeatherViewer/WeatherViewer.jsx";
 import CctvPage from "./components/cctv/cctv-page.jsx";
 import TtncMainLayout from "./components/telemetry/main-layout.jsx";
 import RascubeMainLayout from "./components/rascube/rascube-main-layout.jsx";
+import SstvPage from "./components/sstv/sstv-page.jsx";
+import PacketTelemetryPage from "./components/packets/packet-telemetry-page.jsx";
 
 function WeatherViewerRoute() {
     const { decoderId } = useParams();
@@ -126,6 +128,22 @@ const router = createBrowserRouter([
                     {
                         path: "weather/:decoderId",
                         Component: WeatherViewerRoute,
+                    },
+                    {
+                        path: "sstv-decoder",
+                        Component: SstvPage,
+                    },
+                    {
+                        path: "packets",
+                        Component: PacketTelemetryPage,
+                    },
+                    {
+                        path: "packet-telemetry",
+                        element: <Navigate to="/packets" replace />,
+                    },
+                    {
+                        path: "direwolf",
+                        element: <Navigate to="/packets" replace />,
                     },
                     {
                         path: "files",
