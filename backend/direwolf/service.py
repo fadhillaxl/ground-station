@@ -6,9 +6,8 @@ import asyncio
 import collections
 import glob
 import logging
-import math
 import os
-import random
+import shutil
 import struct
 import threading
 import time
@@ -45,6 +44,106 @@ def _build_candidate_hosts(primary_host: str) -> list[str]:
             seen.add(h)
             ordered.append(h)
     return ordered
+
+
+def _normalize_pcm_block(mono_samples: list[float]) -> list[float]:
+    """Apply soft AGC boost to quiet USB Audio AF output from Icom IC-9700 so SSTV sync detects reliably."""
+    if not mono_samples:
+        return mono_samples
+    peak = max((abs(x) for x in mono_samples), default=0.0)
+    # Boost active audio (> -62 dBFS) toward 0.45 amplitude (max 25x gain) without amplifying dead silence
+    if 0.0008 < peak < 0.35:
+        gain = min(25.0, 0.45 / peak)
+        return [max(-1.0, min(1.0, x * gain)) for x in mono_samples]
+    return mono_samples
+
+
+def _downmix_stereo_and_normalize(samples: list[float], channels: int) -> list[float]:
+    """Downmix 2-channel IC-9700 USB audio (Left=Main VFO, Right=Sub VFO) to mono and apply soft AGC."""
+    if channels == 2 and len(samples) >= 2:
+        left = samples[0::2]
+        right = samples[1::2]
+        peak_l = max((abs(x) for x in left), default=0.0)
+        peak_r = max((abs(x) for x in right), default=0.0)
+        # Automatically pick the active VFO (Main or Sub) or sum both if comparable
+        if peak_l > peak_r * 1.5:
+            mono = left
+        elif peak_r > peak_l * 1.5:
+            mono = right
+        else:
+            mono = [(l_val + r_val) * 0.5 for l_val, r_val in zip(left, right)]
+        return _normalize_pcm_block(mono)
+    return _normalize_pcm_block(samples)
+
+
+def _discover_alsa_capture_candidates(dev_id: str) -> list[tuple[str, str]]:
+    """Build ordered list of (alsa_device, label) for Icom IC-9700 USB Audio CODEC from /proc/asound/cards."""
+    candidates: list[tuple[str, str]] = []
+
+    if dev_id.startswith("server:alsa:") and dev_id != "server:alsa-codec":
+        card_idx = dev_id.split(":")[-1].strip()
+        if card_idx:
+            candidates.append((f"plughw:{card_idx},0", f"ALSA plughw:{card_idx},0"))
+            candidates.append((f"hw:{card_idx},0", f"ALSA hw:{card_idx},0"))
+
+    parsed_cards: list[tuple[str, str, bool]] = []
+    try:
+        if os.path.exists("/proc/asound/cards"):
+            with open("/proc/asound/cards", "r", encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    line_s = line.strip()
+                    if not line_s or not line_s[0].isdigit():
+                        continue
+                    card_num = line_s.split()[0].strip()
+                    card_short = card_num
+                    if "[" in line_s and "]" in line_s:
+                        card_short = line_s.split("[", 1)[1].split("]", 1)[0].strip()
+                    lower_line = line_s.lower()
+                    is_usb_codec = any(
+                        tok in lower_line
+                        for tok in ("codec", "usb", "icom", "9700", "burr-brown", "pcm290", "audio")
+                    )
+                    parsed_cards.append((card_num, card_short, is_usb_codec))
+    except Exception:
+        pass
+
+    # First pass: prioritize USB Audio CODEC / Icom cards
+    for card_num, card_short, is_usb_codec in parsed_cards:
+        if is_usb_codec:
+            if card_short:
+                candidates.append(
+                    (
+                        f"plughw:CARD={card_short},DEV=0",
+                        f"ALSA plughw:CARD={card_short} (Card #{card_num})",
+                    )
+                )
+            candidates.append((f"plughw:{card_num},0", f"ALSA plughw:{card_num},0 ({card_short})"))
+            candidates.append((f"hw:{card_num},0", f"ALSA hw:{card_num},0 ({card_short})"))
+
+    # Standard named CODEC devices
+    candidates.extend(
+        [
+            ("plughw:CARD=CODEC,DEV=0", "ALSA plughw:CARD=CODEC,DEV=0"),
+            ("plughw:CARD=CODEC_1,DEV=0", "ALSA plughw:CARD=CODEC_1,DEV=0"),
+            ("plughw:1,0", "ALSA plughw:1,0"),
+            ("plughw:0,0", "ALSA plughw:0,0"),
+        ]
+    )
+
+    # Second pass: any other sound card on the host
+    for card_num, card_short, is_usb_codec in parsed_cards:
+        if not is_usb_codec:
+            candidates.append((f"plughw:{card_num},0", f"ALSA plughw:{card_num},0 ({card_short})"))
+
+    candidates.append(("default", "ALSA default"))
+
+    deduped: list[tuple[str, str]] = []
+    seen_devs: set[str] = set()
+    for alsa_dev, label in candidates:
+        if alsa_dev not in seen_devs:
+            seen_devs.add(alsa_dev)
+            deduped.append((alsa_dev, label))
+    return deduped
 
 
 class DirewolfService:
@@ -735,52 +834,91 @@ class DirewolfService:
             aud_com = self._audio_com_port
             rig_com = self._rigctld_com_port
 
-        # 1. Try sounddevice (PortAudio) on the server
+        # Ensure ALSA/PortAudio runtime utilities exist inside container even without image rebuild
+        if shutil.which("arecord") is None and os.path.exists("/usr/bin/apt-get"):
+            try:
+                with self._lock:
+                    self._server_audio_backend = "Installing ALSA/PortAudio in container..."
+                await self._emit("direwolf-status", self.get_status_dict())
+                install_proc = await asyncio.create_subprocess_exec(
+                    "sh",
+                    "-c",
+                    "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends alsa-utils libportaudio2",
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL,
+                )
+                await asyncio.wait_for(install_proc.wait(), timeout=45.0)
+            except Exception as exc:
+                logger.debug("Runtime ALSA/PortAudio install skipped: %s", exc)
+
+        # 1. Try sounddevice (PortAudio) on the server unless user explicitly requested an ALSA card ID
         sd_stream = None
         pcm_queue: asyncio.Queue[list[float]] = asyncio.Queue(maxsize=16)
         loop = asyncio.get_running_loop()
 
-        try:
-            import sounddevice as sd
+        if not dev_id.startswith("server:alsa"):
+            try:
+                import sounddevice as sd
 
-            target_sd_device: Any = None
-            if dev_id.startswith("server:sd:"):
-                target_sd_device = int(dev_id.split(":")[-1])
-            else:
-                for idx, d in enumerate(sd.query_devices()):
-                    if int(d.get("max_input_channels", 0)) > 0:
-                        name = str(d.get("name", "")).lower()
-                        if any(k in name for k in ("codec", "icom", "9700", "burr-brown", "usb")):
-                            target_sd_device = idx
-                            break
+                target_sd_device: Any = None
+                target_channels = 1
+                if dev_id.startswith("server:sd:"):
+                    target_sd_device = int(dev_id.split(":")[-1])
+                    dev_info = sd.query_devices(target_sd_device)
+                    target_channels = 2 if int(dev_info.get("max_input_channels", 1)) >= 2 else 1
+                else:
+                    for idx, d in enumerate(sd.query_devices()):
+                        max_in = int(d.get("max_input_channels", 0))
+                        if max_in > 0:
+                            name = str(d.get("name", "")).lower()
+                            if any(
+                                k in name
+                                for k in ("codec", "icom", "9700", "burr-brown", "pcm290", "usb")
+                            ):
+                                target_sd_device = idx
+                                target_channels = 2 if max_in >= 2 else 1
+                                break
 
-            def _enqueue_samples(s: list[float]) -> None:
-                if not pcm_queue.full():
-                    pcm_queue.put_nowait(s)
+                def _enqueue_samples(s: list[float]) -> None:
+                    if not pcm_queue.full():
+                        pcm_queue.put_nowait(s)
 
-            def _sd_callback(indata: Any, frames: int, time_info: Any, status_flags: Any) -> None:
-                del frames, time_info, status_flags
-                try:
-                    samples: list[float] = indata[:, 0].astype("float32").tolist()
-                    loop.call_soon_threadsafe(_enqueue_samples, samples)
-                except Exception:
-                    pass
+                def _sd_callback(
+                    indata: Any, frames: int, time_info: Any, status_flags: Any
+                ) -> None:
+                    del frames, time_info, status_flags
+                    try:
+                        if indata.shape[1] >= 2:
+                            interleaved: list[float] = (
+                                indata[:, :2].reshape(-1).astype("float32").tolist()
+                            )
+                            samples = _downmix_stereo_and_normalize(interleaved, 2)
+                        else:
+                            raw_mono: list[float] = indata[:, 0].astype("float32").tolist()
+                            samples = _normalize_pcm_block(raw_mono)
+                        loop.call_soon_threadsafe(_enqueue_samples, samples)
+                    except Exception:
+                        pass
 
-            sd_stream = sd.InputStream(
-                samplerate=sample_rate,
-                blocksize=chunk_frames,
-                device=target_sd_device,
-                channels=1,
-                dtype="float32",
-                callback=_sd_callback,
-            )
-            sd_stream.start()
-            with self._lock:
-                self._server_audio_backend = f"sounddevice ({aud_com} / USB Audio CODEC)"
-            await self._emit("direwolf-status", self.get_status_dict())
-        except Exception as exc:
-            logger.debug("Server sounddevice input stream not opened (%s); trying ALSA/bridge", exc)
-            sd_stream = None
+                sd_stream = sd.InputStream(
+                    samplerate=sample_rate,
+                    blocksize=chunk_frames,
+                    device=target_sd_device,
+                    channels=target_channels,
+                    dtype="float32",
+                    callback=_sd_callback,
+                )
+                sd_stream.start()
+                with self._lock:
+                    self._server_audio_backend = (
+                        f"sounddevice ({aud_com} / USB Audio CODEC • {target_channels}ch)"
+                    )
+                await self._emit("direwolf-status", self.get_status_dict())
+            except Exception as exc:
+                logger.debug(
+                    "Server sounddevice input stream not opened (%s); trying ALSA/bridge", exc
+                )
+                sd_stream = None
 
         try:
             if sd_stream is not None:
@@ -800,89 +938,100 @@ class DirewolfService:
                     )
                 return
 
-            # 2. Fallback: Try Linux ALSA `arecord -D plughw:CARD=CODEC,DEV=0` on server
-            arecord_proc = None
-            try:
-                arecord_proc = await asyncio.create_subprocess_exec(
-                    "arecord",
-                    "-D",
-                    "plughw:CARD=CODEC,DEV=0",
-                    "-f",
-                    "S16_LE",
-                    "-r",
-                    str(sample_rate),
-                    "-c",
-                    "1",
-                    "-t",
-                    "raw",
-                    "-q",
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.DEVNULL,
-                )
-                # Read first chunk to confirm ALSA device opened
-                initial = await asyncio.wait_for(
-                    arecord_proc.stdout.readexactly(chunk_frames * 2),  # type: ignore[union-attr]
-                    timeout=1.0,
-                )
-                with self._lock:
-                    self._server_audio_backend = f"ALSA plughw:CARD=CODEC ({aud_com})"
-                await self._emit("direwolf-status", self.get_status_dict())
-
-                raw_buf = initial
-                while self._server_audio_streaming:
-                    count = len(raw_buf) // 2
-                    ints = struct.unpack(f"<{count}h", raw_buf[: count * 2])
-                    samples = [val / 32768.0 for val in ints]
-                    await self._emit(
-                        "server-audio-pcm",
-                        {
-                            "samples": samples,
-                            "sampleRate": sample_rate,
-                            "deviceId": dev_id,
-                            "deviceLabel": dev_label,
-                            "audioComPort": aud_com,
-                            "rigctldComPort": rig_com,
-                            "captureBackend": "alsa_arecord",
-                        },
-                    )
-                    raw_buf = await arecord_proc.stdout.readexactly(chunk_frames * 2)  # type: ignore[union-attr]
-                return
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                if arecord_proc is not None:
+            # 2. Fallback: Try Linux ALSA `arecord` across all discovered IC-9700 / USB Audio CODEC devices
+            alsa_candidates = _discover_alsa_capture_candidates(dev_id)
+            for alsa_dev, alsa_label in alsa_candidates:
+                for channels in (2, 1):
+                    if not self._server_audio_streaming:
+                        return
+                    arecord_proc = None
+                    bytes_per_chunk = chunk_frames * 2 * channels
                     try:
-                        arecord_proc.kill()
-                    except Exception:
-                        pass
+                        arecord_proc = await asyncio.create_subprocess_exec(
+                            "arecord",
+                            "-D",
+                            alsa_dev,
+                            "-f",
+                            "S16_LE",
+                            "-r",
+                            str(sample_rate),
+                            "-c",
+                            str(channels),
+                            "-t",
+                            "raw",
+                            "-q",
+                            stdout=asyncio.subprocess.PIPE,
+                            stderr=asyncio.subprocess.DEVNULL,
+                        )
+                        # Read first chunk to verify the ALSA hardware stream is delivering live samples
+                        initial = await asyncio.wait_for(
+                            arecord_proc.stdout.readexactly(bytes_per_chunk),  # type: ignore[union-attr]
+                            timeout=1.2,
+                        )
+                        with self._lock:
+                            self._server_audio_backend = f"{alsa_label} ({aud_com} • {channels}ch)"
+                        logger.info(
+                            "Streaming server Icom IC-9700 audio from %s (%d Hz, %d ch)",
+                            alsa_dev,
+                            sample_rate,
+                            channels,
+                        )
+                        await self._emit("direwolf-status", self.get_status_dict())
 
-            # 3. Server Audio Bridge Standby Monitor (keeps server stream alive when CODEC is idle)
+                        raw_buf = initial
+                        while self._server_audio_streaming:
+                            count = len(raw_buf) // 2
+                            ints = struct.unpack(f"<{count}h", raw_buf[: count * 2])
+                            float_pcm = [val / 32768.0 for val in ints]
+                            samples = _downmix_stereo_and_normalize(float_pcm, channels)
+                            await self._emit(
+                                "server-audio-pcm",
+                                {
+                                    "samples": samples,
+                                    "sampleRate": sample_rate,
+                                    "deviceId": dev_id,
+                                    "deviceLabel": dev_label,
+                                    "audioComPort": aud_com,
+                                    "rigctldComPort": rig_com,
+                                    "captureBackend": f"alsa_arecord ({alsa_dev})",
+                                },
+                            )
+                            raw_buf = await arecord_proc.stdout.readexactly(bytes_per_chunk)  # type: ignore[union-attr]
+                        return
+                    except asyncio.CancelledError:
+                        if arecord_proc is not None:
+                            try:
+                                arecord_proc.kill()
+                            except Exception:
+                                pass
+                        raise
+                    except Exception:
+                        if arecord_proc is not None:
+                            try:
+                                arecord_proc.kill()
+                            except Exception:
+                                pass
+
+            # 3. No hardware USB Audio CODEC exposed in /dev/snd: emit clean zero floor (no fake 380Hz tone)
             with self._lock:
-                self._server_audio_backend = f"Server Bridge ({aud_com} Audio / {rig_com} rigctld)"
+                self._server_audio_backend = (
+                    f"No USB Audio CODEC in /dev/snd ({aud_com} • mount /dev/snd in docker-compose)"
+                )
             await self._emit("direwolf-status", self.get_status_dict())
 
             interval = chunk_frames / float(sample_rate)
-            phase = 0.0
+            zero_samples = [0.0] * chunk_frames
             while self._server_audio_streaming:
-                # Low-level receiver noise floor (-52 dBFS) so server spectrum & waveform stay active
-                samples = [
-                    round(
-                        0.0022 * math.sin(phase + i * 0.05) + (random.random() - 0.5) * 0.003,
-                        6,
-                    )
-                    for i in range(chunk_frames)
-                ]
-                phase = (phase + chunk_frames * 0.05) % (2.0 * math.pi)
                 await self._emit(
                     "server-audio-pcm",
                     {
-                        "samples": samples,
+                        "samples": zero_samples,
                         "sampleRate": sample_rate,
                         "deviceId": dev_id,
                         "deviceLabel": dev_label,
                         "audioComPort": aud_com,
                         "rigctldComPort": rig_com,
-                        "captureBackend": "server_bridge",
+                        "captureBackend": "no_audio_device_in_container",
                     },
                 )
                 await asyncio.sleep(interval)

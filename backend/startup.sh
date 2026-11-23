@@ -4,6 +4,13 @@
 # Run once here to make sure all new libraries are loaded
 ldconfig
 
+# Ensure ALSA utilities (arecord) and PortAudio (libportaudio2) are present for Icom IC-9700 server audio capture
+if ! command -v arecord >/dev/null 2>&1; then
+    echo "Installing alsa-utils and libportaudio2 for Icom IC-9700 USB Audio CODEC..."
+    apt-get update && apt-get install -y --no-install-recommends alsa-utils libportaudio2 >/dev/null 2>&1 || true
+    ldconfig
+fi
+
 # Start system services
 echo "Starting D-Bus system daemon..."
 mkdir -p /var/run/dbus

@@ -18,7 +18,12 @@ from direwolf.kiss import (
     parse_kiss_packet,
     unframe_kiss,
 )
-from direwolf.service import DirewolfService
+from direwolf.service import (
+    DirewolfService,
+    _discover_alsa_capture_candidates,
+    _downmix_stereo_and_normalize,
+    _normalize_pcm_block,
+)
 from handlers.entities.direwolf import router as direwolf_router
 
 pytestmark = pytest.mark.unit
@@ -357,3 +362,22 @@ async def test_direwolf_kiss_tcp_stream_and_readonly_rigctld_probe():
         await kiss_server.wait_closed()
         rig_server.close()
         await rig_server.wait_closed()
+
+
+def test_server_audio_stereo_downmix_agc_and_alsa_discovery():
+    """Verify IC-9700 stereo Main/Sub downmixing, soft AGC boost, and ALSA candidate discovery."""
+    # Quiet mono signal (peak 0.02) gets boosted toward ~0.45 by soft AGC
+    quiet_mono = [0.02, -0.02, 0.01, -0.01]
+    boosted = _normalize_pcm_block(quiet_mono)
+    assert max(abs(x) for x in boosted) >= 0.4
+
+    # Stereo signal where Sub VFO (Right channel) has active audio and Main VFO (Left) is silent
+    stereo_sub_active = [0.0, 0.03, 0.0, -0.03, 0.0, 0.015, 0.0, -0.015]
+    downmixed = _downmix_stereo_and_normalize(stereo_sub_active, 2)
+    assert len(downmixed) == 4
+    assert max(abs(x) for x in downmixed) >= 0.4
+
+    # ALSA candidate discovery includes explicit card index when server:alsa:<idx> is requested
+    candidates = _discover_alsa_capture_candidates("server:alsa:2")
+    assert candidates[0][0] == "plughw:2,0"
+    assert any(dev == "plughw:CARD=CODEC,DEV=0" for dev, _ in candidates)

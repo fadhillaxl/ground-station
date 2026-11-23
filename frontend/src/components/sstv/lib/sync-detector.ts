@@ -93,7 +93,7 @@ export class SyncDetector {
     this.baseBandOscillator = new Phasor(-this.centerFrequency, sampleRate);
 
     this.syncPulseFrequencyValue = this.normalizeFrequency(SyncDetector.SYNC_PULSE_FREQ);
-    this.syncPulseFrequencyTolerance = (50 * 2) / this.scanLineBandwidth;
+    this.syncPulseFrequencyTolerance = (125 * 2) / this.scanLineBandwidth;
 
     const syncPorchFrequency = 1500;
     const syncHighFrequency = (SyncDetector.SYNC_PULSE_FREQ + syncPorchFrequency) / 2;
@@ -140,7 +140,7 @@ export class SyncDetector {
         const avgJitter =
           this.syncPulseCounter > 0 ? this.syncJitterSum / this.syncPulseCounter : 999;
 
-        const isCoherentTone = avgEnergy >= 0.002 && avgJitter <= 0.65;
+        const isCoherentTone = avgEnergy >= 0.0005 && avgJitter <= 0.95;
 
         if (
           !isCoherentTone ||
@@ -153,17 +153,26 @@ export class SyncDetector {
           this.syncEnergySum = 0;
           this.syncJitterSum = 0;
         } else {
+          let candidateWidth: SyncPulseWidth;
           if (this.syncPulseCounter < this.syncPulse5msMaxSamples) {
-            syncPulseWidth = SyncPulseWidth.FiveMilliSeconds;
+            candidateWidth = SyncPulseWidth.FiveMilliSeconds;
           } else if (this.syncPulseCounter < this.syncPulse9msMaxSamples) {
-            syncPulseWidth = SyncPulseWidth.NineMilliSeconds;
+            candidateWidth = SyncPulseWidth.NineMilliSeconds;
           } else {
-            syncPulseWidth = SyncPulseWidth.TwentyMilliSeconds;
+            candidateWidth = SyncPulseWidth.TwentyMilliSeconds;
           }
 
-          syncPulseOffset = i - this.syncPulseFilterDelay;
-          frequencyOffset = syncPulseDelayedValue - this.syncPulseFrequencyValue;
-          syncPulseDetected = true;
+          // Do not allow a shorter separator pulse to overwrite an already-detected 9ms/20ms sync pulse
+          if (
+            !syncPulseDetected ||
+            candidateWidth !== SyncPulseWidth.FiveMilliSeconds ||
+            syncPulseWidth === SyncPulseWidth.FiveMilliSeconds
+          ) {
+            syncPulseWidth = candidateWidth;
+            syncPulseOffset = i - this.syncPulseFilterDelay;
+            frequencyOffset = syncPulseDelayedValue - this.syncPulseFrequencyValue;
+            syncPulseDetected = true;
+          }
           this.syncPulseCounter = 0;
           this.syncEnergySum = 0;
           this.syncJitterSum = 0;

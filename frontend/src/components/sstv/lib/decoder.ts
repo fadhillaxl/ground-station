@@ -7,6 +7,7 @@ import { PD160LineDecoder } from './pd160-line-decoder';
 import { PD180LineDecoder } from './pd180-line-decoder';
 import { ScottieS1LineDecoder } from './scottie-s1-line-decoder';
 import { ScottieS2LineDecoder } from './scottie-s2-line-decoder';
+import { MartinLineDecoder } from './martin-line-decoder';
 
 export enum DecoderState {
   IDLE = 'IDLE',
@@ -34,7 +35,8 @@ type LineDecoderInstance =
   | PD160LineDecoder
   | PD180LineDecoder
   | ScottieS1LineDecoder
-  | ScottieS2LineDecoder;
+  | ScottieS2LineDecoder
+  | MartinLineDecoder;
 
 /**
  * Main SSTV Decoder with automatic SSTV signal & mode detection.
@@ -106,6 +108,8 @@ export class SSTVDecoder {
     if (modeName === 'PD120') return new PD120LineDecoder(this.sampleRate);
     if (modeName === 'PD160') return new PD160LineDecoder(this.sampleRate);
     if (modeName === 'PD180') return new PD180LineDecoder(this.sampleRate);
+    if (modeName === 'MARTIN_M1') return new MartinLineDecoder(this.sampleRate, 146.432);
+    if (modeName === 'MARTIN_M2') return new MartinLineDecoder(this.sampleRate, 73.216);
     return new Robot36LineDecoder(this.sampleRate);
   }
 
@@ -140,13 +144,15 @@ export class SSTVDecoder {
       minMs: number;
       maxMs: number;
     }> = [
-      { key: 'ROBOT36', minMs: 141, maxMs: 159 },
-      { key: 'SCOTTIE_S2', minMs: 264, maxMs: 289 },
-      { key: 'ROBOT72', minMs: 290, maxMs: 315 },
-      { key: 'SCOTTIE_S1', minMs: 410, maxMs: 446 },
-      { key: 'PD120', minMs: 482, maxMs: 524 },
-      { key: 'PD180', minMs: 725, maxMs: 775 },
-      { key: 'PD160', minMs: 780, maxMs: 830 },
+      { key: 'ROBOT36', minMs: 138, maxMs: 162 },
+      { key: 'MARTIN_M2', minMs: 216, maxMs: 238 },
+      { key: 'SCOTTIE_S2', minMs: 262, maxMs: 289 },
+      { key: 'ROBOT72', minMs: 290, maxMs: 316 },
+      { key: 'SCOTTIE_S1', minMs: 410, maxMs: 436 },
+      { key: 'MARTIN_M1', minMs: 437, maxMs: 460 },
+      { key: 'PD120', minMs: 480, maxMs: 526 },
+      { key: 'PD180', minMs: 722, maxMs: 778 },
+      { key: 'PD160', minMs: 779, maxMs: 835 },
     ];
 
     if (!this.autoDetect) {
@@ -159,12 +165,12 @@ export class SSTVDecoder {
 
     for (const c of candidates) {
       if (intervalMs >= c.minMs && intervalMs <= c.maxMs) {
-        // PD modes use 20ms sync pulses, Robot/Scottie use 9ms sync pulses (allow slight tolerance)
         if (
-          (c.key === 'PD120' || c.key === 'PD160' || c.key === 'PD180') &&
-          pulseWidth === SyncPulseWidth.FiveMilliSeconds
+          c.key === 'SCOTTIE_S1' &&
+          pulseWidth === SyncPulseWidth.FiveMilliSeconds &&
+          intervalMs >= 435
         ) {
-          continue;
+          return 'MARTIN_M1';
         }
         return c.key;
       }
@@ -174,11 +180,23 @@ export class SSTVDecoder {
   }
 
   /**
-   * Process incoming audio samples
+   * Process incoming audio samples (automatically slices large buffers into 512-sample sub-blocks
+   * so consecutive sync pulses inside a 4096-sample chunk are never overwritten).
    */
   processSamples(samples: Float32Array): void {
+    if (!samples || samples.length === 0) return;
+    if (samples.length > 512) {
+      for (let offset = 0; offset < samples.length; offset += 512) {
+        this.processChunk(samples.subarray(offset, Math.min(offset + 512, samples.length)));
+      }
+      return;
+    }
+    this.processChunk(samples);
+  }
+
+  private processChunk(samples: Float32Array): void {
     const rms = Math.sqrt(samples.reduce((sum, val) => sum + val * val, 0) / samples.length);
-    const currentStrength = Math.min(100, rms * 500);
+    const currentStrength = Math.min(100, rms * 650);
     this.signalStrength = this.signalStrength * 0.8 + currentStrength * 0.2;
 
     if (this.state === DecoderState.IDLE) {
@@ -210,7 +228,8 @@ export class SSTVDecoder {
 
     if (
       result.detected &&
-      (result.width === SyncPulseWidth.NineMilliSeconds ||
+      (result.width === SyncPulseWidth.FiveMilliSeconds ||
+        result.width === SyncPulseWidth.NineMilliSeconds ||
         result.width === SyncPulseWidth.TwentyMilliSeconds)
     ) {
       const syncEndPos =

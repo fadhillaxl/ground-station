@@ -78,4 +78,34 @@ describe('SstvPage (Dynamic Waterfall-style Grid Layout + smolgroot DSP engine)'
         expect(sstvItem).toBeTruthy();
         expect(sstvItem.title).toBe('SSTV');
     });
+
+    it('auto-detects and decodes SSTV signal fed in 4096-sample server chunks (Robot 36 / Martin M1)', () => {
+        const sampleRate = 48000;
+        const decoder = new SSTVDecoder(sampleRate, 'ROBOT36', true);
+        decoder.start();
+
+        // Synthesize 4 lines of Robot 36 (150 ms per line: 9 ms 1200 Hz sync + 141 ms 1850 Hz image tone)
+        const totalSamples = Math.floor(sampleRate * 0.65);
+        const signal = new Float32Array(totalSamples);
+        const lineSamples = Math.floor(sampleRate * 0.15);
+        const syncSamples = Math.floor(sampleRate * 0.009);
+        let phase = 0;
+
+        for (let i = 0; i < totalSamples; i += 1) {
+            const posInLine = i % lineSamples;
+            const freq = posInLine < syncSamples ? 1200 : 1850;
+            phase += (2 * Math.PI * freq) / sampleRate;
+            signal[i] = 0.4 * Math.sin(phase);
+        }
+
+        // Feed in 4096-sample server PCM chunks
+        for (let offset = 0; offset < totalSamples; offset += 4096) {
+            const chunk = signal.subarray(offset, Math.min(offset + 4096, totalSamples));
+            decoder.processSamples(chunk);
+        }
+
+        const stats = decoder.getStats();
+        expect(stats.state).toBe(DecoderState.DECODING_IMAGE);
+        expect(stats.currentLine).toBeGreaterThan(0);
+    });
 });

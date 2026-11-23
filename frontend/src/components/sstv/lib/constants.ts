@@ -137,6 +137,38 @@ export const SSTV_MODES = {
     colorScanTimes: [88.064, 88.064, 88.064], // R, G, B channels all 88.064ms
     colorOrder: ['R', 'G', 'B'], // RGB sequential (G-B-sync-R order in time)
   },
+  MARTIN_M1: {
+    name: 'Martin M1',
+    visCode: 44,
+    width: 320,
+    height: 256,
+    // Martin M1 line: sync(4.862) + porch(0.572) + G(146.432) + sep(0.572) + B(146.432) + sep(0.572) + R(146.432) + sep(0.572) = 446.446ms
+    scanTime: 446.446,
+    syncPulse: 4.862,
+    syncPorch: 0.572,
+    porchFreq: 1500,
+    separatorPulse: 0.572,
+    separatorPulses: [0.572, 0.572, 0.572],
+    colorScanTime: 146.432,
+    colorScanTimes: [146.432, 146.432, 146.432],
+    colorOrder: ['G', 'B', 'R'],
+  },
+  MARTIN_M2: {
+    name: 'Martin M2',
+    visCode: 40,
+    width: 320,
+    height: 256,
+    // Martin M2 line: sync(4.862) + porch(0.572) + G(73.216) + sep(0.572) + B(73.216) + sep(0.572) + R(73.216) + sep(0.572) = 226.798ms
+    scanTime: 226.798,
+    syncPulse: 4.862,
+    syncPorch: 0.572,
+    porchFreq: 1500,
+    separatorPulse: 0.572,
+    separatorPulses: [0.572, 0.572, 0.572],
+    colorScanTime: 73.216,
+    colorScanTimes: [73.216, 73.216, 73.216],
+    colorOrder: ['G', 'B', 'R'],
+  },
 } as const;
 
 // Frequency constants

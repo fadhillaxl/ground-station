@@ -286,7 +286,21 @@ export const MODES_LIST = [
         name: 'Auto Detect (SSTV Signal)',
         shortLabel: 'Auto Detect',
         resolution: 'Auto',
-        description: 'Auto-detects SSTV signal & mode (Robot 36/72, Scottie S1/S2, PD 120/160/180) before decoding',
+        description: 'Auto-detects SSTV signal & mode (Martin M1/M2, Robot 36/72, Scottie S1/S2, PD 120/160/180) before decoding',
+    },
+    {
+        id: 'MARTIN_M1',
+        name: 'Martin M1',
+        shortLabel: 'Martin M1 Mode',
+        resolution: '320×256',
+        description: '320×256 • Popular VHF/UHF & HF mode (446ms/line) • GBR sequential',
+    },
+    {
+        id: 'MARTIN_M2',
+        name: 'Martin M2',
+        shortLabel: 'Martin M2 Mode',
+        resolution: '320×256',
+        description: '320×256 • Fast Martin mode (227ms/line) • GBR sequential',
     },
     {
         id: 'ROBOT36',

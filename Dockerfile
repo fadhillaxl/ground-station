@@ -588,6 +588,12 @@ RUN sed -i 's/#enable-reflector=no/enable-reflector=yes/' /etc/avahi/avahi-daemo
     sed -i 's/#reflect-ipv=no/reflect-ipv=yes/' /etc/avahi/avahi-daemon.conf && \
     sed -i 's/use-ipv6=yes/use-ipv6=no/' /etc/avahi/avahi-daemon.conf
 
+# Install ALSA utilities (arecord) and PortAudio library (for Python sounddevice) to capture Icom IC-9700 USB Audio CODEC
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    alsa-utils \
+    libportaudio2 \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR backend/
 
 # Command to run the application with UHD images downloader and conditional FPGA loading

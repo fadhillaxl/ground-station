@@ -20,6 +20,8 @@ services:
       - ./backend/data:/app/backend/data
       # Map host USB devices to the container for SDR hardware detection
       - /dev/bus/usb:/dev/bus/usb
+      # Map host ALSA sound devices (/dev/snd) so backend can read Icom IC-9700 USB Audio CODEC directly
+      - /dev/snd:/dev/snd
 
     extra_hosts:
       - "host.docker.internal:host-gateway"
