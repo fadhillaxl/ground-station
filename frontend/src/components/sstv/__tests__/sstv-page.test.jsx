@@ -37,10 +37,10 @@ describe('SstvPage (Dynamic Waterfall-style Grid Layout + smolgroot DSP engine)'
         expect(screen.getByText('Settings')).toBeTruthy();
         expect(screen.getByText('Audio Source (IC-9700)')).toBeTruthy();
         expect(
-            screen.getByText(
-                /USB Audio CODEC — Icom IC-9700 \(Auto-Lock USB Sound Card • 48000 Hz\)/i
-            )
-        ).toBeTruthy();
+            screen.getAllByText(
+                /\[TCP STREAM\] USB Audio CODEC — http:\/\/192\.168\.123\.89:8000\/stream \(48000 Hz WAV\)/i
+            ).length
+        ).toBeGreaterThan(0);
         expect(screen.getByText('ICOM IC-9700 USB AUDIO CODEC & CAT')).toBeTruthy();
         expect(screen.getAllByText('Auto Detect (SSTV Signal)').length).toBeGreaterThan(0);
         expect(screen.getByText('Audio Analysis')).toBeTruthy();

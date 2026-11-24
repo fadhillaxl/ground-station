@@ -78,9 +78,9 @@ export function normalizeAndDownmixStereo(
     if (a > peak) peak = a;
   }
 
-  // Soft AGC: boost active audio (> -62 dBFS) toward 0.45 amplitude (max 25x gain)
-  if (peak > 0.0008 && peak < 0.35) {
-    const gain = Math.min(25.0, 0.45 / peak);
+  // Soft AGC: idle squelch floor on IC-9700 USB Audio CODEC is ~0.004-0.007; boost active signals (> 0.012) toward 0.45
+  if (peak > 0.012 && peak < 0.35) {
+    const gain = Math.min(22.5, 0.45 / peak);
     for (let i = 0; i < len; i++) {
       const v = mono[i] * gain;
       mono[i] = v > 1.0 ? 1.0 : v < -1.0 ? -1.0 : v;
@@ -91,21 +91,32 @@ export function normalizeAndDownmixStereo(
 }
 
 export function useAudioProcessor(mode: SSTVMode = 'AUTO') {
+  const [tcpAudioUrl, setTcpAudioUrl] = useState<string>('http://192.168.123.89:8000/stream');
   const [state, setState] = useState<AudioProcessorState>({
     isRecording: false,
     isSupported: true,
     error: null,
     stats: null,
-    activeDeviceLabel: 'USB Audio CODEC — Icom IC-9700 (48000 Hz Sound Card • rigctld: COM3 → :4532)',
+    activeDeviceLabel:
+      '[TCP STREAM] USB Audio CODEC — http://192.168.123.89:8000/stream (48000 Hz WAV)',
     inputSourceMode: 'server',
     rigctldComPort: 'COM3',
     audioComPort: 'USB Audio CODEC',
     captureBackend: null,
   });
 
-  // Default to Auto-Lock USB Audio CODEC Sound Card (checks both host/browser USB Audio CODEC & server ALSA/PortAudio)
-  const [selectedDeviceId, setSelectedDeviceId] = useState<string>('usb-audio-codec:auto');
+  // Default to TCP/HTTP WAV Stream from USB Audio CODEC (http://192.168.123.89:8000/stream)
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string>('server:tcp-stream');
   const [audioDevices, setAudioDevices] = useState<AudioInputDeviceInfo[]>([
+    {
+      deviceId: 'server:tcp-stream',
+      label: '[TCP STREAM] USB Audio CODEC — http://192.168.123.89:8000/stream (48000 Hz WAV)',
+      isIcomCodec: true,
+      sourceType: 'server',
+      comPort: 'USB Audio CODEC',
+      rigctldComPort: 'COM3',
+      sampleRate: 48000,
+    },
     {
       deviceId: 'usb-audio-codec:auto',
       label: 'USB Audio CODEC — Icom IC-9700 (Auto-Lock USB Sound Card • 48000 Hz)',
@@ -152,14 +163,24 @@ export function useAudioProcessor(mode: SSTVMode = 'AUTO') {
   const lastStatsUpdateMsRef = useRef<number>(0);
   const lastReportedLineRef = useRef<number>(-1);
   const lastReportedStateRef = useRef<string>('');
+  const nextAudioScheduleTimeRef = useRef<number>(0);
 
   const updateServerPorts = useCallback(
-    async (nextRigCom: string, nextAudioCom: string, nextDeviceId?: string) => {
+    async (
+      nextRigCom: string,
+      nextAudioCom: string,
+      nextDeviceId?: string,
+      nextTcpUrl?: string
+    ) => {
+      const targetUrl = (nextTcpUrl ?? tcpAudioUrl).trim() || 'http://192.168.123.89:8000/stream';
+      if (nextTcpUrl !== undefined) {
+        setTcpAudioUrl(targetUrl);
+      }
       setState((prev) => ({
         ...prev,
         rigctldComPort: nextRigCom,
         audioComPort: nextAudioCom || 'USB Audio CODEC',
-        activeDeviceLabel: `USB Audio CODEC — Icom IC-9700 (48000 Hz Sound Card • rigctld: ${nextRigCom} → :4532)`,
+        activeDeviceLabel: `[TCP STREAM] USB Audio CODEC — ${targetUrl} (48000 Hz WAV • rigctld: ${nextRigCom} → :4532)`,
       }));
       try {
         await fetch(resolveUrl('/api/direwolf/config'), {
@@ -169,18 +190,28 @@ export function useAudioProcessor(mode: SSTVMode = 'AUTO') {
             rigctld_com_port: nextRigCom,
             audio_com_port: nextAudioCom || 'USB Audio CODEC',
             device_id: nextDeviceId || selectedDeviceId,
+            tcp_audio_url: targetUrl,
           }),
         });
       } catch {
         // Ignore offline errors during local unit tests
       }
     },
-    [selectedDeviceId]
+    [selectedDeviceId, tcpAudioUrl]
   );
 
   const refreshAudioDevices = useCallback(
     async (requestClientMicPermission = false): Promise<AudioInputDeviceInfo[]> => {
       const combined: AudioInputDeviceInfo[] = [
+        {
+          deviceId: 'server:tcp-stream',
+          label: `[TCP STREAM] USB Audio CODEC — ${tcpAudioUrl} (48000 Hz WAV)`,
+          isIcomCodec: true,
+          sourceType: 'server',
+          comPort: 'USB Audio CODEC',
+          rigctldComPort: state.rigctldComPort || 'COM3',
+          sampleRate: 48000,
+        },
         {
           deviceId: 'usb-audio-codec:auto',
           label: 'USB Audio CODEC — Icom IC-9700 (Auto-Lock USB Sound Card • 48000 Hz)',
@@ -262,6 +293,9 @@ export function useAudioProcessor(mode: SSTVMode = 'AUTO') {
             setServerSerialPorts(data.serialPorts);
           }
           if (data?.activeConfig) {
+            if (data.activeConfig.tcpAudioUrl) {
+              setTcpAudioUrl(String(data.activeConfig.tcpAudioUrl));
+            }
             setState((prev) => ({
               ...prev,
               rigctldComPort: data.activeConfig.rigctldComPort || prev.rigctldComPort,
@@ -273,7 +307,7 @@ export function useAudioProcessor(mode: SSTVMode = 'AUTO') {
         // Fallback default server presets if backend is unreachable
       }
 
-      if (!combined.some((d) => d.sourceType === 'server')) {
+      if (!combined.some((d) => d.deviceId === 'server:icom-com4')) {
         combined.push(
           {
             deviceId: 'server:icom-com4',
@@ -305,7 +339,7 @@ export function useAudioProcessor(mode: SSTVMode = 'AUTO') {
 
       return combined;
     },
-    [state.rigctldComPort]
+    [state.rigctldComPort, tcpAudioUrl]
   );
 
   useEffect(() => {
@@ -500,7 +534,7 @@ export function useAudioProcessor(mode: SSTVMode = 'AUTO') {
           return { codecDeviceId: undefined, initialStream: probeStream };
         };
 
-        // Helper to start Server ALSA / PortAudio USB Audio CODEC stream
+        // Helper to start Server TCP WAV Stream / ALSA / PortAudio USB Audio CODEC stream
         const startServerUsbAudioStream = async (serverDeviceId: string): Promise<boolean> => {
           const res = await fetch(resolveUrl('/api/direwolf/audio/start'), {
             method: 'POST',
@@ -509,6 +543,7 @@ export function useAudioProcessor(mode: SSTVMode = 'AUTO') {
               device_id: serverDeviceId,
               rigctld_com_port: state.rigctldComPort,
               audio_com_port: 'USB Audio CODEC',
+              tcp_audio_url: tcpAudioUrl,
               sample_rate: 48000,
             }),
           });
@@ -516,7 +551,7 @@ export function useAudioProcessor(mode: SSTVMode = 'AUTO') {
           const serverInfo = data?.status?.serverAudio;
           const backendName = String(serverInfo?.captureBackend || '');
 
-          // Check if the server container actually opened a hardware USB Audio CODEC sound card
+          // Check if the server container actually opened a hardware or TCP USB Audio CODEC stream
           const containerHasNoSoundCard =
             backendName.includes('no_audio_device_in_container') ||
             backendName.includes('No USB Audio CODEC');
@@ -534,6 +569,7 @@ export function useAudioProcessor(mode: SSTVMode = 'AUTO') {
               await audioContext.resume().catch(() => {});
             }
             audioContextRef.current = audioContext;
+            nextAudioScheduleTimeRef.current = 0;
             const analyser = audioContext.createAnalyser();
             analyser.fftSize = 2048;
             analyserRef.current = analyser;
@@ -562,6 +598,9 @@ export function useAudioProcessor(mode: SSTVMode = 'AUTO') {
               const analyser = analyserRef.current;
               if (ctx && analyser && floatSamples.length > 0) {
                 try {
+                  if (ctx.state === 'suspended') {
+                    ctx.resume().catch(() => {});
+                  }
                   const buf = ctx.createBuffer(
                     1,
                     floatSamples.length,
@@ -571,7 +610,17 @@ export function useAudioProcessor(mode: SSTVMode = 'AUTO') {
                   const src = ctx.createBufferSource();
                   src.buffer = buf;
                   src.connect(analyser);
-                  src.start();
+
+                  // Schedule chunks gaplessly back-to-back so Bandscope, Waveform & Waterfall stay continuous
+                  const now = ctx.currentTime;
+                  if (
+                    nextAudioScheduleTimeRef.current < now ||
+                    nextAudioScheduleTimeRef.current > now + 0.35
+                  ) {
+                    nextAudioScheduleTimeRef.current = now;
+                  }
+                  src.start(nextAudioScheduleTimeRef.current);
+                  nextAudioScheduleTimeRef.current += buf.duration;
                 } catch {
                   // Ignore AudioContext scheduling errors
                 }
@@ -588,7 +637,7 @@ export function useAudioProcessor(mode: SSTVMode = 'AUTO') {
           const activeLabel =
             serverInfo?.deviceLabel ||
             matchedDev?.label ||
-            `[SERVER Sound Card] Icom IC-9700 USB Audio CODEC (${backendName || 'ALSA/PortAudio'})`;
+            `[TCP STREAM] USB Audio CODEC — ${tcpAudioUrl} (48000 Hz WAV)`;
 
           setState((prev) => ({
             ...prev,
@@ -596,7 +645,7 @@ export function useAudioProcessor(mode: SSTVMode = 'AUTO') {
             inputSourceMode: 'server',
             error: null,
             activeDeviceLabel: activeLabel,
-            captureBackend: backendName || 'Server USB Audio CODEC',
+            captureBackend: backendName || `TCP WAV Stream (${tcpAudioUrl})`,
             stats: decoderRef.current ? { ...decoderRef.current.getStats(), snr: null } : null,
           }));
           return true;
@@ -767,7 +816,15 @@ export function useAudioProcessor(mode: SSTVMode = 'AUTO') {
         }));
       }
     },
-    [audioDevices, calculateSNR, mode, refreshAudioDevices, selectedDeviceId, state.rigctldComPort]
+    [
+      audioDevices,
+      calculateSNR,
+      mode,
+      refreshAudioDevices,
+      selectedDeviceId,
+      state.rigctldComPort,
+      tcpAudioUrl,
+    ]
   );
 
   const resetDecoder = useCallback(() => {
@@ -814,6 +871,8 @@ export function useAudioProcessor(mode: SSTVMode = 'AUTO') {
     serverSerialPorts,
     selectedDeviceId,
     setSelectedDeviceId,
+    tcpAudioUrl,
+    setTcpAudioUrl,
     updateServerPorts,
     refreshAudioDevices,
     startRecording,

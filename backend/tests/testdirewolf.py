@@ -1,6 +1,7 @@
 """Unit tests for Direwolf KISS framing/un-framing, AX.25 callsign/payload parser, and API routes."""
 
 import asyncio
+import struct
 
 import pytest
 from fastapi import FastAPI
@@ -20,9 +21,11 @@ from direwolf.kiss import (
 )
 from direwolf.service import (
     DirewolfService,
+    _build_candidate_tcp_audio_urls,
     _discover_alsa_capture_candidates,
     _downmix_stereo_and_normalize,
     _normalize_pcm_block,
+    _parse_wav_stream_header,
 )
 from handlers.entities.direwolf import router as direwolf_router
 
@@ -381,3 +384,14 @@ def test_server_audio_stereo_downmix_agc_and_alsa_discovery():
     candidates = _discover_alsa_capture_candidates("server:alsa:2")
     assert candidates[0][0] == "plughw:2,0"
     assert any(dev == "plughw:CARD=CODEC,DEV=0" for dev, _ in candidates)
+
+    # TCP WAV stream URL candidate normalization and 44-byte WAV header parser
+    urls = _build_candidate_tcp_audio_urls("192.168.123.89:8000")
+    assert urls[0] == "http://192.168.123.89:8000/stream"
+    wav_hdr = (
+        b"RIFF\xff\xff\xff\xffWAVEfmt "
+        + struct.pack("<IHHIIHH", 16, 1, 1, 48000, 96000, 2, 16)
+        + b"data\xff\xff\xff\xff"
+    )
+    ch, sr, bps = _parse_wav_stream_header(wav_hdr)
+    assert (ch, sr, bps) == (1, 48000, 16)

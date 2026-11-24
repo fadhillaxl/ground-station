@@ -38,6 +38,7 @@ import {
     Select,
     Stack,
     Switch,
+    TextField,
     Tooltip,
     Typography,
     useTheme,
@@ -415,6 +416,8 @@ export default function SstvPage() {
         serverSerialPorts,
         selectedDeviceId,
         setSelectedDeviceId,
+        tcpAudioUrl,
+        setTcpAudioUrl,
         updateServerPorts,
         refreshAudioDevices,
         startRecording,
@@ -1195,11 +1198,18 @@ export default function SstvPage() {
                                                 label="Audio Input Device (USB Sound Card)"
                                                 onChange={handleAudioDeviceChange}
                                             >
+                                                <MenuItem value="server:tcp-stream">
+                                                    [TCP STREAM] USB Audio CODEC — {tcpAudioUrl} (48000 Hz WAV)
+                                                </MenuItem>
                                                 <MenuItem value="usb-audio-codec:auto">
                                                     USB Audio CODEC — Icom IC-9700 (Auto-Lock USB Sound Card • 48000 Hz)
                                                 </MenuItem>
                                                 {audioDevices
-                                                    .filter((dev) => dev.deviceId !== 'usb-audio-codec:auto')
+                                                    .filter(
+                                                        (dev) =>
+                                                            dev.deviceId !== 'server:tcp-stream' &&
+                                                            dev.deviceId !== 'usb-audio-codec:auto'
+                                                    )
                                                     .map((dev) => (
                                                         <MenuItem key={dev.deviceId} value={dev.deviceId}>
                                                             {dev.label}
@@ -1224,35 +1234,46 @@ export default function SstvPage() {
                                             >
                                                 ICOM IC-9700 USB AUDIO CODEC & CAT
                                             </Typography>
-                                            <Typography
-                                                variant="caption"
-                                                color="text.secondary"
-                                                display="block"
-                                                sx={{ mb: 1, fontSize: '0.7rem', lineHeight: 1.35 }}
-                                            >
-                                                Audio IC-9700 masuk melalui Sound Card <b>USB Audio CODEC</b> (48 kHz Stereo Main/Sub VFO), bukan melalui port serial COM.
-                                            </Typography>
-                                            <FormControl fullWidth size="small">
-                                                <InputLabel id="sstv-rig-com-label">rigctld CAT Serial Port (:4532)</InputLabel>
-                                                <Select
-                                                    labelId="sstv-rig-com-label"
-                                                    value={state.rigctldComPort || 'COM3'}
-                                                    label="rigctld CAT Serial Port (:4532)"
-                                                    onChange={(e) =>
+                                            <Stack spacing={1}>
+                                                <TextField
+                                                    fullWidth
+                                                    size="small"
+                                                    label="TCP / HTTP WAV Stream URL (USB Audio CODEC)"
+                                                    value={tcpAudioUrl}
+                                                    onChange={(e) => setTcpAudioUrl(e.target.value)}
+                                                    onBlur={() =>
                                                         updateServerPorts(
-                                                            e.target.value,
+                                                            state.rigctldComPort || 'COM3',
                                                             'USB Audio CODEC',
-                                                            selectedDeviceId
+                                                            selectedDeviceId,
+                                                            tcpAudioUrl
                                                         )
                                                     }
-                                                >
-                                                    {(serverSerialPorts || []).map((sp) => (
-                                                        <MenuItem key={`rig-${sp.port}`} value={sp.port}>
-                                                            {sp.port} (rigctld CAT → TCP :4532)
-                                                        </MenuItem>
-                                                    ))}
-                                                </Select>
-                                            </FormControl>
+                                                    placeholder="http://192.168.123.89:8000/stream"
+                                                />
+                                                <FormControl fullWidth size="small">
+                                                    <InputLabel id="sstv-rig-com-label">rigctld CAT Serial Port (:4532)</InputLabel>
+                                                    <Select
+                                                        labelId="sstv-rig-com-label"
+                                                        value={state.rigctldComPort || 'COM3'}
+                                                        label="rigctld CAT Serial Port (:4532)"
+                                                        onChange={(e) =>
+                                                            updateServerPorts(
+                                                                e.target.value,
+                                                                'USB Audio CODEC',
+                                                                selectedDeviceId,
+                                                                tcpAudioUrl
+                                                            )
+                                                        }
+                                                    >
+                                                        {(serverSerialPorts || []).map((sp) => (
+                                                            <MenuItem key={`rig-${sp.port}`} value={sp.port}>
+                                                                {sp.port} (rigctld CAT → TCP :4532)
+                                                            </MenuItem>
+                                                        ))}
+                                                    </Select>
+                                                </FormControl>
+                                            </Stack>
                                         </Paper>
 
                                         <Stack direction="row" spacing={1}>

@@ -11,6 +11,7 @@ import shutil
 import struct
 import threading
 import time
+import urllib.request
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -47,15 +48,53 @@ def _build_candidate_hosts(primary_host: str) -> list[str]:
 
 
 def _normalize_pcm_block(mono_samples: list[float]) -> list[float]:
-    """Apply soft AGC boost to quiet USB Audio AF output from Icom IC-9700 so SSTV sync detects reliably."""
+    """Apply soft AGC boost to active USB Audio AF output from Icom IC-9700 without boosting idle squelch floor."""
     if not mono_samples:
         return mono_samples
     peak = max((abs(x) for x in mono_samples), default=0.0)
-    # Boost active audio (> -62 dBFS) toward 0.45 amplitude (max 25x gain) without amplifying dead silence
-    if 0.0008 < peak < 0.35:
-        gain = min(25.0, 0.45 / peak)
+    # Idle squelch floor on IC-9700 USB Audio CODEC is ~0.004-0.007; boost active signals (> 0.012) toward 0.45
+    if 0.012 < peak < 0.35:
+        gain = min(22.5, 0.45 / peak)
         return [max(-1.0, min(1.0, x * gain)) for x in mono_samples]
     return mono_samples
+
+
+def _build_candidate_tcp_audio_urls(primary_url: str) -> list[str]:
+    """Return ordered list of unique TCP/HTTP WAV stream URLs to reach the USB Audio CODEC streamer."""
+    raw = (primary_url or "").strip() or "http://192.168.123.89:8000/stream"
+    if not raw.startswith("http://") and not raw.startswith("https://"):
+        raw = f"http://{raw}"
+    if raw.endswith(":8000") or raw.endswith(":8000/"):
+        raw = raw.rstrip("/") + "/stream"
+
+    candidates = [
+        raw,
+        "http://192.168.123.89:8000/stream",
+        "http://host.docker.internal:8000/stream",
+        "http://127.0.0.1:8000/stream",
+        "http://172.17.0.1:8000/stream",
+    ]
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for u in candidates:
+        if u and u not in seen:
+            seen.add(u)
+            ordered.append(u)
+    return ordered
+
+
+def _parse_wav_stream_header(hdr: bytes) -> tuple[int, int, int]:
+    """Parse 44-byte WAV header and return (channels, sample_rate, bits_per_sample)."""
+    if len(hdr) >= 36 and hdr[:4] == b"RIFF" and hdr[8:12] == b"WAVE":
+        try:
+            _fmt, ch, sr, _br, _ba, bps = struct.unpack("<HHIIHH", hdr[20:36])
+            channels = ch if ch in (1, 2) else 1
+            sample_rate = sr if 8000 <= sr <= 96000 else 48000
+            bits = bps if bps in (16, 32) else 16
+            return channels, sample_rate, bits
+        except Exception:
+            pass
+    return 1, 48000, 16
 
 
 def _downmix_stereo_and_normalize(samples: list[float], channels: int) -> list[float]:
@@ -160,14 +199,17 @@ class DirewolfService:
         self._rigctld_primary_host = os.environ.get("RIGCTLD_HOST", "host.docker.internal")
         self._rigctld_port = int(os.environ.get("RIGCTLD_PORT", "4532"))
 
-        # Server-side Icom IC-9700 CAT Serial + USB Audio CODEC Sound Card mapping
-        # Default: COM3 for rigctld CAT control (:4532), USB Audio CODEC Sound Card for Audio
+        # Server-side Icom IC-9700 CAT Serial + USB Audio CODEC TCP/HTTP WAV Stream & Sound Card mapping
+        # Default: COM3 for rigctld CAT control (:4532), http://192.168.123.89:8000/stream for USB Audio CODEC TCP stream
         self._rigctld_com_port = os.environ.get("ICOM_RIGCTLD_PORT_DEVICE", "COM3")
         self._audio_com_port = os.environ.get("ICOM_AUDIO_PORT_DEVICE", "USB Audio CODEC")
-        self._server_audio_device_id = os.environ.get("ICOM_SERVER_AUDIO_ID", "server:icom-com4")
+        self._tcp_audio_url = os.environ.get(
+            "ICOM_TCP_AUDIO_URL", "http://192.168.123.89:8000/stream"
+        )
+        self._server_audio_device_id = os.environ.get("ICOM_SERVER_AUDIO_ID", "server:tcp-stream")
         self._server_audio_device_label = (
-            f"[SERVER Sound Card] Icom IC-9700 {self._audio_com_port} "
-            f"(rigctld: {self._rigctld_com_port} → :{self._rigctld_port})"
+            f"[TCP STREAM] USB Audio CODEC — {self._tcp_audio_url} "
+            f"(48000 Hz WAV • rigctld: {self._rigctld_com_port} → :{self._rigctld_port})"
         )
         self._input_source_mode = "server"  # 'server' | 'client_web'
         self._server_audio_streaming = False
@@ -463,6 +505,7 @@ class DirewolfService:
                     "inputSourceMode": self._input_source_mode,
                     "rigctldComPort": self._rigctld_com_port,
                     "audioComPort": self._audio_com_port,
+                    "tcpAudioUrl": self._tcp_audio_url,
                     "deviceId": self._server_audio_device_id,
                     "deviceLabel": self._server_audio_device_label,
                     "sampleRate": self._server_audio_sample_rate,
@@ -628,18 +671,30 @@ class DirewolfService:
         return results
 
     def discover_server_devices(self) -> dict[str, Any]:
-        """Discover server-side audio input devices and serial/COM ports for Icom IC-9700."""
+        """Discover server-side audio input devices (TCP WAV stream, ALSA, PortAudio) and serial ports for IC-9700."""
         with self._lock:
             rig_com = self._rigctld_com_port
             aud_com = self._audio_com_port
             rig_port = self._rigctld_port
+            tcp_url = self._tcp_audio_url
 
         audio_devices: list[dict[str, Any]] = [
+            {
+                "deviceId": "server:tcp-stream",
+                "label": f"[TCP STREAM] USB Audio CODEC — {tcp_url} (48000 Hz WAV • rigctld: {rig_com} → :{rig_port})",
+                "isIcomCodec": True,
+                "sourceType": "server",
+                "tcpAudioUrl": tcp_url,
+                "comPort": aud_com,
+                "rigctldComPort": rig_com,
+                "sampleRate": 48000,
+            },
             {
                 "deviceId": "server:icom-com4",
                 "label": f"[SERVER • {aud_com}] Icom IC-9700 USB Audio CODEC (Server • rigctld: {rig_com} → :{rig_port})",
                 "isIcomCodec": True,
                 "sourceType": "server",
+                "tcpAudioUrl": tcp_url,
                 "comPort": aud_com,
                 "rigctldComPort": rig_com,
                 "sampleRate": 48000,
@@ -649,6 +704,7 @@ class DirewolfService:
                 "label": f"[SERVER • ALSA] Icom IC-9700 plughw:CARD=CODEC,DEV=0 (48000 Hz • rigctld: {rig_com})",
                 "isIcomCodec": True,
                 "sourceType": "server",
+                "tcpAudioUrl": tcp_url,
                 "comPort": aud_com,
                 "rigctldComPort": rig_com,
                 "sampleRate": 48000,
@@ -750,13 +806,16 @@ class DirewolfService:
         audio_com_port: Optional[str] = None,
         device_id: Optional[str] = None,
         input_source_mode: Optional[str] = None,
+        tcp_audio_url: Optional[str] = None,
     ) -> dict[str, Any]:
-        """Update server-side Icom IC-9700 COM3/COM4 & audio source configuration."""
+        """Update server-side Icom IC-9700 CAT port, USB Audio CODEC & TCP stream URL configuration."""
         with self._lock:
             if rigctld_com_port and rigctld_com_port.strip():
                 self._rigctld_com_port = rigctld_com_port.strip()
             if audio_com_port and audio_com_port.strip():
                 self._audio_com_port = audio_com_port.strip()
+            if tcp_audio_url and tcp_audio_url.strip():
+                self._tcp_audio_url = tcp_audio_url.strip()
             if input_source_mode in ("server", "client_web"):
                 self._input_source_mode = input_source_mode
             if device_id and device_id.strip():
@@ -766,10 +825,16 @@ class DirewolfService:
                 else:
                     self._input_source_mode = "client_web"
 
-            self._server_audio_device_label = (
-                f"[SERVER • {self._audio_com_port}] Icom IC-9700 USB Audio CODEC "
-                f"(rigctld: {self._rigctld_com_port} → :{self._rigctld_port})"
-            )
+            if self._server_audio_device_id == "server:tcp-stream":
+                self._server_audio_device_label = (
+                    f"[TCP STREAM] USB Audio CODEC — {self._tcp_audio_url} "
+                    f"(48000 Hz WAV • rigctld: {self._rigctld_com_port} → :{self._rigctld_port})"
+                )
+            else:
+                self._server_audio_device_label = (
+                    f"[SERVER • {self._audio_com_port}] Icom IC-9700 USB Audio CODEC "
+                    f"(rigctld: {self._rigctld_com_port} → :{self._rigctld_port})"
+                )
 
         status = self.get_status_dict()
         await self._emit("direwolf-status", status)
@@ -781,13 +846,15 @@ class DirewolfService:
         rigctld_com_port: Optional[str] = None,
         audio_com_port: Optional[str] = None,
         sample_rate: int = 48000,
+        tcp_audio_url: Optional[str] = None,
     ) -> dict[str, Any]:
-        """Start capturing audio from the Server Icom IC-9700 (COM4 / USB Audio CODEC) and stream via Socket.IO."""
+        """Start capturing audio from the Server Icom IC-9700 (TCP WAV Stream / USB Audio CODEC) and stream via Socket.IO."""
         await self.update_server_config(
             rigctld_com_port=rigctld_com_port,
             audio_com_port=audio_com_port,
-            device_id=device_id or "server:icom-com4",
+            device_id=device_id or "server:tcp-stream",
             input_source_mode="server",
+            tcp_audio_url=tcp_audio_url,
         )
         await self.stop_server_audio_stream()
 
@@ -825,7 +892,7 @@ class DirewolfService:
         return status
 
     async def _server_audio_capture_loop(self) -> None:
-        """Background loop streaming 48 kHz Float32 PCM chunks from Server USB Audio CODEC to Web UI."""
+        """Background loop streaming 48 kHz Float32 PCM chunks from TCP WAV Stream or Server USB Audio CODEC to Web UI."""
         chunk_frames = 4096
         with self._lock:
             sample_rate = self._server_audio_sample_rate
@@ -833,6 +900,139 @@ class DirewolfService:
             dev_label = self._server_audio_device_label
             aud_com = self._audio_com_port
             rig_com = self._rigctld_com_port
+            tcp_url = self._tcp_audio_url
+
+        loop = asyncio.get_running_loop()
+
+        # 0. Primary: Connect to TCP/HTTP WAV Stream (e.g. http://192.168.123.89:8000/stream from USB Audio CODEC)
+        if not dev_id.startswith("server:alsa") and not dev_id.startswith("server:sd:"):
+            tcp_queue: asyncio.Queue[tuple[list[float], int, str]] = asyncio.Queue(maxsize=24)
+            tcp_connected_evt = asyncio.Event()
+            tcp_failed_evt = asyncio.Event()
+            stop_reader_flag = threading.Event()
+
+            def _enqueue_tcp_chunk(item: tuple[list[float], int, str]) -> None:
+                if not tcp_connected_evt.is_set():
+                    tcp_connected_evt.set()
+                if not tcp_queue.full():
+                    tcp_queue.put_nowait(item)
+
+            def _mark_tcp_failed() -> None:
+                if not tcp_connected_evt.is_set():
+                    tcp_failed_evt.set()
+
+            def _tcp_wav_reader_worker() -> None:
+                candidate_urls = _build_candidate_tcp_audio_urls(tcp_url)
+                ever_connected = False
+                while self._server_audio_streaming and not stop_reader_flag.is_set():
+                    opened_any = False
+                    for candidate in candidate_urls:
+                        if not self._server_audio_streaming or stop_reader_flag.is_set():
+                            return
+                        try:
+                            with urllib.request.urlopen(candidate, timeout=2.5) as resp:
+                                hdr = resp.read(44)
+                                if not hdr or len(hdr) < 44:
+                                    continue
+                                channels, wav_sr, bps = _parse_wav_stream_header(hdr)
+                                bytes_per_sample = max(2, bps // 8)
+                                bytes_per_chunk = chunk_frames * channels * bytes_per_sample
+                                opened_any = True
+                                ever_connected = True
+                                logger.info(
+                                    "Connected to IC-9700 USB Audio CODEC TCP WAV stream at %s (%d Hz, %d ch, %d-bit)",
+                                    candidate,
+                                    wav_sr,
+                                    channels,
+                                    bps,
+                                )
+                                while (
+                                    self._server_audio_streaming and not stop_reader_flag.is_set()
+                                ):
+                                    raw_buf = resp.read(bytes_per_chunk)
+                                    if not raw_buf or len(raw_buf) < 2:
+                                        break
+                                    count = len(raw_buf) // 2
+                                    ints = struct.unpack(f"<{count}h", raw_buf[: count * 2])
+                                    float_pcm = [val / 32768.0 for val in ints]
+                                    samples = _downmix_stereo_and_normalize(float_pcm, channels)
+                                    loop.call_soon_threadsafe(
+                                        _enqueue_tcp_chunk, (samples, wav_sr, candidate)
+                                    )
+                                break
+                        except Exception as exc:
+                            logger.debug("TCP WAV stream candidate %s failed: %s", candidate, exc)
+                            continue
+
+                    if not opened_any and not ever_connected:
+                        loop.call_soon_threadsafe(_mark_tcp_failed)
+                        return
+
+                    if self._server_audio_streaming and not stop_reader_flag.is_set():
+                        time.sleep(1.0)
+
+            reader_thread = threading.Thread(
+                target=_tcp_wav_reader_worker,
+                name="direwolf-tcp-wav-reader",
+                daemon=True,
+            )
+            reader_thread.start()
+
+            try:
+                done, _ = await asyncio.wait(
+                    [
+                        asyncio.create_task(tcp_connected_evt.wait()),
+                        asyncio.create_task(tcp_failed_evt.wait()),
+                    ],
+                    timeout=3.0,
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                del done
+                if tcp_connected_evt.is_set():
+                    first_samples, active_sr, active_url = await tcp_queue.get()
+                    with self._lock:
+                        self._server_audio_sample_rate = active_sr
+                        self._server_audio_backend = (
+                            f"TCP WAV Stream ({active_url} • USB Audio CODEC {active_sr} Hz)"
+                        )
+                        self._server_audio_device_label = (
+                            f"[TCP STREAM] USB Audio CODEC — {active_url} ({active_sr} Hz)"
+                        )
+                    await self._emit("direwolf-status", self.get_status_dict())
+                    await self._emit(
+                        "server-audio-pcm",
+                        {
+                            "samples": first_samples,
+                            "sampleRate": active_sr,
+                            "deviceId": dev_id,
+                            "deviceLabel": self._server_audio_device_label,
+                            "audioComPort": aud_com,
+                            "rigctldComPort": rig_com,
+                            "tcpAudioUrl": active_url,
+                            "captureBackend": f"tcp_wav_stream ({active_url})",
+                        },
+                    )
+                    while self._server_audio_streaming:
+                        samples, chunk_sr, chunk_url = await tcp_queue.get()
+                        await self._emit(
+                            "server-audio-pcm",
+                            {
+                                "samples": samples,
+                                "sampleRate": chunk_sr,
+                                "deviceId": dev_id,
+                                "deviceLabel": self._server_audio_device_label,
+                                "audioComPort": aud_com,
+                                "rigctldComPort": rig_com,
+                                "tcpAudioUrl": chunk_url,
+                                "captureBackend": f"tcp_wav_stream ({chunk_url})",
+                            },
+                        )
+                    return
+            except asyncio.CancelledError:
+                stop_reader_flag.set()
+                raise
+            finally:
+                stop_reader_flag.set()
 
         # Ensure ALSA/PortAudio runtime utilities exist inside container even without image rebuild
         if shutil.which("arecord") is None and os.path.exists("/usr/bin/apt-get"):
@@ -854,7 +1054,6 @@ class DirewolfService:
         # 1. Try sounddevice (PortAudio) on the server unless user explicitly requested an ALSA card ID
         sd_stream = None
         pcm_queue: asyncio.Queue[list[float]] = asyncio.Queue(maxsize=16)
-        loop = asyncio.get_running_loop()
 
         if not dev_id.startswith("server:alsa"):
             try:
