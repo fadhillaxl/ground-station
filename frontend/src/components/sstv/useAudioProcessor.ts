@@ -164,6 +164,7 @@ export function useAudioProcessor(mode: SSTVMode = 'AUTO') {
   const lastReportedLineRef = useRef<number>(-1);
   const lastReportedStateRef = useRef<string>('');
   const nextAudioScheduleTimeRef = useRef<number>(0);
+  const streamAbortControllerRef = useRef<AbortController | null>(null);
 
   const updateServerPorts = useCallback(
     async (
@@ -394,6 +395,11 @@ export function useAudioProcessor(mode: SSTVMode = 'AUTO') {
   }, []);
 
   const stopRecording = useCallback(() => {
+    if (streamAbortControllerRef.current) {
+      streamAbortControllerRef.current.abort();
+      streamAbortControllerRef.current = null;
+    }
+
     // Unsubscribe from Server Socket.IO audio stream if active
     const sock = typeof window !== 'undefined' ? (window as any).__socket : null;
     if (sock && socketHandlerRef.current) {
@@ -534,8 +540,190 @@ export function useAudioProcessor(mode: SSTVMode = 'AUTO') {
           return { codecDeviceId: undefined, initialStream: probeStream };
         };
 
+        // Helper to feed a Float32 PCM block into SSTVDecoder + gapless Web Audio AnalyserNode
+        const feedNormalizedPcmBlock = (floatSamples: Float32Array, blockSampleRate: number) => {
+          if (!decoderRef.current || floatSamples.length === 0) return;
+          decoderRef.current.processSamples(floatSamples);
+
+          const ctx = audioContextRef.current;
+          const analyser = analyserRef.current;
+          if (ctx && analyser) {
+            try {
+              if (ctx.state === 'suspended') {
+                ctx.resume().catch(() => {});
+              }
+              const buf = ctx.createBuffer(1, floatSamples.length, blockSampleRate);
+              buf.copyToChannel(floatSamples, 0);
+              const src = ctx.createBufferSource();
+              src.buffer = buf;
+              src.connect(analyser);
+
+              // Schedule chunks gaplessly back-to-back with a 5.0s network jitter ceiling
+              const now = ctx.currentTime;
+              if (
+                nextAudioScheduleTimeRef.current < now ||
+                nextAudioScheduleTimeRef.current > now + 5.0
+              ) {
+                nextAudioScheduleTimeRef.current = now;
+              }
+              src.start(nextAudioScheduleTimeRef.current);
+              nextAudioScheduleTimeRef.current += buf.duration;
+            } catch {
+              // Ignore AudioContext scheduling errors
+            }
+          }
+
+          maybeUpdateStats();
+        };
+
         // Helper to start Server TCP WAV Stream / ALSA / PortAudio USB Audio CODEC stream
         const startServerUsbAudioStream = async (serverDeviceId: string): Promise<boolean> => {
+          const serverSampleRate = 48000;
+
+          // 1. Primary for TCP WAV Stream: Direct Binary HTTP WAV Stream Proxy (/api/direwolf/audio/stream)
+          // Avoids Python JSON serialization & Socket.IO bottlenecks on busy servers/VMs
+          if (
+            serverDeviceId === 'server:tcp-stream' ||
+            serverDeviceId === 'server:icom-com4'
+          ) {
+            try {
+              if (streamAbortControllerRef.current) {
+                streamAbortControllerRef.current.abort();
+              }
+              const abortCtrl = new AbortController();
+              streamAbortControllerRef.current = abortCtrl;
+
+              const streamUrl = resolveUrl(
+                `/api/direwolf/audio/stream?url=${encodeURIComponent(tcpAudioUrl)}`
+              );
+              const streamRes = await fetch(streamUrl, { signal: abortCtrl.signal });
+              if (
+                streamRes.ok &&
+                streamRes.body &&
+                typeof streamRes.body.getReader === 'function'
+              ) {
+                const reader = streamRes.body.getReader();
+                const firstRead = await reader.read();
+                if (!firstRead.done && firstRead.value && firstRead.value.byteLength >= 44) {
+                  let pending = new Uint8Array(firstRead.value);
+
+                  // Parse 44-byte WAV header
+                  let numChannels = 1;
+                  let wavSampleRate = serverSampleRate;
+                  if (
+                    pending.byteLength >= 36 &&
+                    pending[0] === 0x52 && // 'R'
+                    pending[1] === 0x49 && // 'I'
+                    pending[2] === 0x46 && // 'F'
+                    pending[3] === 0x46 // 'F'
+                  ) {
+                    const hdrView = new DataView(
+                      pending.buffer,
+                      pending.byteOffset,
+                      pending.byteLength
+                    );
+                    const ch = hdrView.getUint16(22, true);
+                    const sr = hdrView.getUint32(24, true);
+                    if (ch === 1 || ch === 2) numChannels = ch;
+                    if (sr >= 8000 && sr <= 96000) wavSampleRate = sr;
+                  }
+                  pending = pending.slice(44);
+
+                  if (hasAudioContext) {
+                    const audioContext = new AudioContext({ sampleRate: wavSampleRate });
+                    if (audioContext.state === 'suspended') {
+                      await audioContext.resume().catch(() => {});
+                    }
+                    audioContextRef.current = audioContext;
+                    nextAudioScheduleTimeRef.current = 0;
+                    const analyser = audioContext.createAnalyser();
+                    analyser.fftSize = 2048;
+                    analyserRef.current = analyser;
+
+                    const silentGain = audioContext.createGain();
+                    silentGain.gain.value = 0.0001;
+                    analyser.connect(silentGain);
+                    silentGain.connect(audioContext.destination);
+                    silentGainRef.current = silentGain;
+                  }
+
+                  decoderRef.current = new SSTVDecoder(wavSampleRate, initialBaseMode, isAutoMode);
+                  decoderRef.current.start();
+                  lastStatsUpdateMsRef.current = 0;
+                  lastReportedLineRef.current = -1;
+                  lastReportedStateRef.current = '';
+
+                  const chunkFrames = 4096;
+                  const bytesPerFrame = numChannels * 2;
+                  const bytesPerChunk = chunkFrames * bytesPerFrame;
+
+                  const processPendingBytes = () => {
+                    while (pending.byteLength >= bytesPerChunk) {
+                      const view = new DataView(
+                        pending.buffer,
+                        pending.byteOffset,
+                        bytesPerChunk
+                      );
+                      let normalized: Float32Array;
+                      if (numChannels === 2) {
+                        const left = new Float32Array(chunkFrames);
+                        const right = new Float32Array(chunkFrames);
+                        for (let i = 0; i < chunkFrames; i++) {
+                          left[i] = view.getInt16(i * 4, true) / 32768.0;
+                          right[i] = view.getInt16(i * 4 + 2, true) / 32768.0;
+                        }
+                        normalized = normalizeAndDownmixStereo(left, right);
+                      } else {
+                        const mono = new Float32Array(chunkFrames);
+                        for (let i = 0; i < chunkFrames; i++) {
+                          mono[i] = view.getInt16(i * 2, true) / 32768.0;
+                        }
+                        normalized = normalizeAndDownmixStereo(mono, null);
+                      }
+                      pending = pending.slice(bytesPerChunk);
+                      feedNormalizedPcmBlock(normalized, wavSampleRate);
+                    }
+                  };
+
+                  processPendingBytes();
+
+                  // Background binary stream pump
+                  void (async () => {
+                    try {
+                      while (!abortCtrl.signal.aborted) {
+                        const { value, done } = await reader.read();
+                        if (done || !value) break;
+                        const merged = new Uint8Array(pending.byteLength + value.byteLength);
+                        merged.set(pending, 0);
+                        merged.set(value, pending.byteLength);
+                        pending = merged;
+                        processPendingBytes();
+                      }
+                    } catch {
+                      // Stream closed or aborted cleanly
+                    }
+                  })();
+
+                  setState((prev) => ({
+                    ...prev,
+                    isRecording: true,
+                    inputSourceMode: 'server',
+                    error: null,
+                    activeDeviceLabel: `[TCP STREAM] USB Audio CODEC — ${tcpAudioUrl} (${wavSampleRate} Hz WAV)`,
+                    captureBackend: `Direct Binary WAV Stream (${tcpAudioUrl} • ${wavSampleRate} Hz)`,
+                    stats: decoderRef.current
+                      ? { ...decoderRef.current.getStats(), snr: null }
+                      : null,
+                  }));
+                  return true;
+                }
+              }
+            } catch {
+              // Fall back to Socket.IO audio bridge below if direct stream endpoint unavailable
+            }
+          }
+
+          // 2. Fallback: Server Socket.IO Audio Stream (/api/direwolf/audio/start)
           const res = await fetch(resolveUrl('/api/direwolf/audio/start'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -562,7 +750,6 @@ export function useAudioProcessor(mode: SSTVMode = 'AUTO') {
             return false;
           }
 
-          const serverSampleRate = 48000;
           if (hasAudioContext) {
             const audioContext = new AudioContext({ sampleRate: serverSampleRate });
             if (audioContext.state === 'suspended') {
@@ -592,41 +779,7 @@ export function useAudioProcessor(mode: SSTVMode = 'AUTO') {
             const handleServerPcm = (pkt: any) => {
               if (!pkt || !Array.isArray(pkt.samples) || !decoderRef.current) return;
               const floatSamples = Float32Array.from(pkt.samples);
-              decoderRef.current.processSamples(floatSamples);
-
-              const ctx = audioContextRef.current;
-              const analyser = analyserRef.current;
-              if (ctx && analyser && floatSamples.length > 0) {
-                try {
-                  if (ctx.state === 'suspended') {
-                    ctx.resume().catch(() => {});
-                  }
-                  const buf = ctx.createBuffer(
-                    1,
-                    floatSamples.length,
-                    pkt.sampleRate || serverSampleRate
-                  );
-                  buf.copyToChannel(floatSamples, 0);
-                  const src = ctx.createBufferSource();
-                  src.buffer = buf;
-                  src.connect(analyser);
-
-                  // Schedule chunks gaplessly back-to-back so Bandscope, Waveform & Waterfall stay continuous
-                  const now = ctx.currentTime;
-                  if (
-                    nextAudioScheduleTimeRef.current < now ||
-                    nextAudioScheduleTimeRef.current > now + 0.35
-                  ) {
-                    nextAudioScheduleTimeRef.current = now;
-                  }
-                  src.start(nextAudioScheduleTimeRef.current);
-                  nextAudioScheduleTimeRef.current += buf.duration;
-                } catch {
-                  // Ignore AudioContext scheduling errors
-                }
-              }
-
-              maybeUpdateStats();
+              feedNormalizedPcmBlock(floatSamples, pkt.sampleRate || serverSampleRate);
             };
 
             socketHandlerRef.current = handleServerPcm;

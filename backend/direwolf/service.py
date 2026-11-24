@@ -13,7 +13,7 @@ import threading
 import time
 import urllib.request
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, AsyncIterator, Optional
 
 from direwolf.kiss import (
     KISS_CMD_DATA,
@@ -35,7 +35,6 @@ def _build_candidate_hosts(primary_host: str) -> list[str]:
         "127.0.0.1",
         "localhost",
         "host.docker.internal",
-        "host.containers.internal",
         "172.17.0.1",
     ]
     seen: set[str] = set()
@@ -47,6 +46,17 @@ def _build_candidate_hosts(primary_host: str) -> list[str]:
     return ordered
 
 
+def _read_exact_bytes(stream: Any, num_bytes: int) -> bytes:
+    """Read exactly num_bytes from a stream so 16-bit PCM samples are never split at odd byte boundaries."""
+    buf = bytearray()
+    while len(buf) < num_bytes:
+        chunk = stream.read(num_bytes - len(buf))
+        if not chunk:
+            break
+        buf.extend(chunk)
+    return bytes(buf)
+
+
 def _normalize_pcm_block(mono_samples: list[float]) -> list[float]:
     """Apply soft AGC boost to active USB Audio AF output from Icom IC-9700 without boosting idle squelch floor."""
     if not mono_samples:
@@ -55,8 +65,8 @@ def _normalize_pcm_block(mono_samples: list[float]) -> list[float]:
     # Idle squelch floor on IC-9700 USB Audio CODEC is ~0.004-0.007; boost active signals (> 0.012) toward 0.45
     if 0.012 < peak < 0.35:
         gain = min(22.5, 0.45 / peak)
-        return [max(-1.0, min(1.0, x * gain)) for x in mono_samples]
-    return mono_samples
+        return [round(max(-1.0, min(1.0, x * gain)), 5) for x in mono_samples]
+    return [round(x, 5) for x in mono_samples]
 
 
 def _build_candidate_tcp_audio_urls(primary_url: str) -> list[str]:
@@ -355,16 +365,20 @@ class DirewolfService:
         return False
 
     async def _rigctld_health_loop(self) -> None:
-        """Periodically check manual rigctld TCP status on port 4532 and broadcast status."""
+        """Periodically check manual rigctld TCP status on port 4532 and broadcast status when changed."""
+        prev_connected: Optional[bool] = None
         while self._running:
             try:
-                status = await self.probe_rigctld_readonly(timeout=0.6)
-                await self._emit("direwolf-status", status)
+                status = await self.probe_rigctld_readonly(timeout=0.35)
+                curr_connected = bool(status["rigctld"]["connected"])
+                if curr_connected != prev_connected:
+                    prev_connected = curr_connected
+                    await self._emit("direwolf-status", status)
             except asyncio.CancelledError:
                 break
             except Exception as exc:
                 logger.debug("rigctld health probe error: %s", exc)
-            await asyncio.sleep(5.0)
+            await asyncio.sleep(10.0)
 
     async def _kiss_client_loop(self) -> None:
         """Auto-reconnecting TCP client for Direwolf KISS server on port 8001."""
@@ -379,7 +393,7 @@ class DirewolfService:
                 try:
                     reader, writer = await asyncio.wait_for(
                         asyncio.open_connection(host, self._kiss_port),
-                        timeout=1.5,
+                        timeout=0.45,
                     )
                     connected_host = host
                     break
@@ -394,7 +408,7 @@ class DirewolfService:
                     self._kiss_connected = False
                     self._kiss_active_host = None
                     self._kiss_reconnect_attempts += 1
-                await asyncio.sleep(3.0)
+                await asyncio.sleep(10.0)
                 continue
 
             with self._lock:
@@ -891,6 +905,84 @@ class DirewolfService:
         await self._emit("direwolf-status", status)
         return status
 
+    async def iter_raw_tcp_wav_stream(
+        self,
+        override_url: Optional[str] = None,
+    ) -> AsyncIterator[bytes]:
+        """Yield raw binary WAV stream bytes (44-byte header + 8192-byte PCM chunks) with zero JSON overhead."""
+        await self.stop_server_audio_stream()
+
+        with self._lock:
+            if override_url and override_url.strip():
+                self._tcp_audio_url = override_url.strip()
+            target_url = self._tcp_audio_url
+            self._server_audio_streaming = True
+            self._server_audio_backend = f"Direct Binary WAV Stream ({target_url})"
+
+        raw_queue: asyncio.Queue[Optional[bytes]] = asyncio.Queue(maxsize=48)
+        stop_evt = threading.Event()
+        loop = asyncio.get_running_loop()
+
+        def _put_raw(data: Optional[bytes]) -> None:
+            if data is None:
+                while raw_queue.full():
+                    try:
+                        raw_queue.get_nowait()
+                    except Exception:
+                        break
+                raw_queue.put_nowait(None)
+                return
+            if not raw_queue.full():
+                raw_queue.put_nowait(data)
+
+        def _raw_reader_worker() -> None:
+            candidates = _build_candidate_tcp_audio_urls(target_url)
+            for candidate in candidates:
+                if stop_evt.is_set():
+                    break
+                try:
+                    with urllib.request.urlopen(candidate, timeout=6.0) as resp:
+                        hdr = _read_exact_bytes(resp, 44)
+                        if not hdr or len(hdr) < 44:
+                            continue
+                        channels, wav_sr, bps = _parse_wav_stream_header(hdr)
+                        with self._lock:
+                            self._server_audio_sample_rate = wav_sr
+                            self._server_audio_backend = (
+                                f"Direct Binary WAV Stream ({candidate} • {wav_sr} Hz)"
+                            )
+                        loop.call_soon_threadsafe(_put_raw, hdr)
+                        bytes_per_chunk = 4096 * channels * max(2, bps // 8)
+                        while not stop_evt.is_set():
+                            chunk = _read_exact_bytes(resp, bytes_per_chunk)
+                            if not chunk:
+                                break
+                            loop.call_soon_threadsafe(_put_raw, chunk)
+                        break
+                except Exception as exc:
+                    logger.debug("Direct WAV stream candidate %s error: %s", candidate, exc)
+                    continue
+            loop.call_soon_threadsafe(_put_raw, None)
+
+        worker = threading.Thread(
+            target=_raw_reader_worker,
+            name="direwolf-raw-wav-proxy",
+            daemon=True,
+        )
+        worker.start()
+
+        try:
+            while not stop_evt.is_set():
+                item = await raw_queue.get()
+                if item is None:
+                    break
+                yield item
+        finally:
+            stop_evt.set()
+            with self._lock:
+                self._server_audio_streaming = False
+                self._server_audio_backend = "idle"
+
     async def _server_audio_capture_loop(self) -> None:
         """Background loop streaming 48 kHz Float32 PCM chunks from TCP WAV Stream or Server USB Audio CODEC to Web UI."""
         chunk_frames = 4096
@@ -906,7 +998,7 @@ class DirewolfService:
 
         # 0. Primary: Connect to TCP/HTTP WAV Stream (e.g. http://192.168.123.89:8000/stream from USB Audio CODEC)
         if not dev_id.startswith("server:alsa") and not dev_id.startswith("server:sd:"):
-            tcp_queue: asyncio.Queue[tuple[list[float], int, str]] = asyncio.Queue(maxsize=24)
+            tcp_queue: asyncio.Queue[tuple[list[float], int, str]] = asyncio.Queue(maxsize=48)
             tcp_connected_evt = asyncio.Event()
             tcp_failed_evt = asyncio.Event()
             stop_reader_flag = threading.Event()
@@ -930,8 +1022,8 @@ class DirewolfService:
                         if not self._server_audio_streaming or stop_reader_flag.is_set():
                             return
                         try:
-                            with urllib.request.urlopen(candidate, timeout=2.5) as resp:
-                                hdr = resp.read(44)
+                            with urllib.request.urlopen(candidate, timeout=6.0) as resp:
+                                hdr = _read_exact_bytes(resp, 44)
                                 if not hdr or len(hdr) < 44:
                                     continue
                                 channels, wav_sr, bps = _parse_wav_stream_header(hdr)
@@ -949,7 +1041,7 @@ class DirewolfService:
                                 while (
                                     self._server_audio_streaming and not stop_reader_flag.is_set()
                                 ):
-                                    raw_buf = resp.read(bytes_per_chunk)
+                                    raw_buf = _read_exact_bytes(resp, bytes_per_chunk)
                                     if not raw_buf or len(raw_buf) < 2:
                                         break
                                     count = len(raw_buf) // 2

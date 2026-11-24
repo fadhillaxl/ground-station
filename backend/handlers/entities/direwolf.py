@@ -6,6 +6,7 @@ import logging
 from typing import Any, Optional
 
 from fastapi import APIRouter, Body, HTTPException, Query
+from fastapi.responses import StreamingResponse
 
 from direwolf.kiss import KISSFrameError
 from direwolf.service import service
@@ -169,3 +170,22 @@ async def stop_direwolf_server_audio() -> dict[str, Any]:
     """Stop server-side Icom IC-9700 audio stream."""
     status = await service.stop_server_audio_stream()
     return {"success": True, "status": status}
+
+
+@router.get("/audio/stream")
+async def stream_direwolf_tcp_wav_audio(
+    url: Optional[str] = Query(
+        None,
+        description="Optional override TCP/HTTP WAV stream URL (default http://192.168.123.89:8000/stream)",
+    ),
+) -> StreamingResponse:
+    """Proxy raw binary WAV stream from IC-9700 USB Audio CODEC TCP streamer with zero JSON/Socket.IO overhead."""
+    return StreamingResponse(
+        service.iter_raw_tcp_wav_stream(override_url=url),
+        media_type="audio/wav",
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
