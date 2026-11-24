@@ -1187,94 +1187,73 @@ export default function SstvPage() {
                                 <AccordionDetails>
                                     <Stack spacing={1.5}>
                                         <FormControl fullWidth size="small">
-                                            <InputLabel id="sstv-audio-source-label">Audio Input Device</InputLabel>
+                                            <InputLabel id="sstv-audio-source-label">Audio Input Device (USB Sound Card)</InputLabel>
                                             <Select
                                                 labelId="sstv-audio-source-label"
                                                 id="sstv-audio-source-select"
                                                 value={selectedDeviceId}
-                                                label="Audio Input Device"
+                                                label="Audio Input Device (USB Sound Card)"
                                                 onChange={handleAudioDeviceChange}
                                             >
-                                                <MenuItem value="server:icom-com4">
-                                                    [SERVER • {state.audioComPort}] Icom IC-9700 USB Audio CODEC (Server • rigctld: {state.rigctldComPort})
+                                                <MenuItem value="usb-audio-codec:auto">
+                                                    USB Audio CODEC — Icom IC-9700 (Auto-Lock USB Sound Card • 48000 Hz)
                                                 </MenuItem>
                                                 {audioDevices
-                                                    .filter((dev) => dev.deviceId !== 'server:icom-com4')
+                                                    .filter((dev) => dev.deviceId !== 'usb-audio-codec:auto')
                                                     .map((dev) => (
                                                         <MenuItem key={dev.deviceId} value={dev.deviceId}>
                                                             {dev.label}
                                                         </MenuItem>
                                                     ))}
-                                                <MenuItem value="icom-auto">
-                                                    [CLIENT WEB] Icom IC-9700 (USB Audio CODEC — Browser Auto Detect)
-                                                </MenuItem>
                                                 <MenuItem value="default">
-                                                    [CLIENT WEB] System Default Browser Microphone / Line-In
+                                                    [SOUND CARD] System Default Audio Input / Line-In
                                                 </MenuItem>
                                             </Select>
                                         </FormControl>
 
-                                        {selectedDeviceId.startsWith('server:') && (
-                                            <Paper
-                                                variant="outlined"
-                                                sx={{ p: 1, bgcolor: 'background.default', borderRadius: 1 }}
+                                        <Paper
+                                            variant="outlined"
+                                            sx={{ p: 1, bgcolor: 'background.default', borderRadius: 1 }}
+                                        >
+                                            <Typography
+                                                variant="caption"
+                                                fontWeight={700}
+                                                color="primary.main"
+                                                display="block"
+                                                sx={{ mb: 0.75 }}
                                             >
-                                                <Typography
-                                                    variant="caption"
-                                                    fontWeight={700}
-                                                    color="primary.main"
-                                                    display="block"
-                                                    sx={{ mb: 1 }}
+                                                ICOM IC-9700 USB AUDIO CODEC & CAT
+                                            </Typography>
+                                            <Typography
+                                                variant="caption"
+                                                color="text.secondary"
+                                                display="block"
+                                                sx={{ mb: 1, fontSize: '0.7rem', lineHeight: 1.35 }}
+                                            >
+                                                Audio IC-9700 masuk melalui Sound Card <b>USB Audio CODEC</b> (48 kHz Stereo Main/Sub VFO), bukan melalui port serial COM.
+                                            </Typography>
+                                            <FormControl fullWidth size="small">
+                                                <InputLabel id="sstv-rig-com-label">rigctld CAT Serial Port (:4532)</InputLabel>
+                                                <Select
+                                                    labelId="sstv-rig-com-label"
+                                                    value={state.rigctldComPort || 'COM3'}
+                                                    label="rigctld CAT Serial Port (:4532)"
+                                                    onChange={(e) =>
+                                                        updateServerPorts(
+                                                            e.target.value,
+                                                            'USB Audio CODEC',
+                                                            selectedDeviceId
+                                                        )
+                                                    }
                                                 >
-                                                    SERVER ICOM IC-9700 USB PORTS
-                                                </Typography>
-                                                <Stack direction="row" spacing={1}>
-                                                    <FormControl fullWidth size="small">
-                                                        <InputLabel id="sstv-rig-com-label">rigctld Port</InputLabel>
-                                                        <Select
-                                                            labelId="sstv-rig-com-label"
-                                                            value={state.rigctldComPort || 'COM3'}
-                                                            label="rigctld Port"
-                                                            onChange={(e) =>
-                                                                updateServerPorts(
-                                                                    e.target.value,
-                                                                    state.audioComPort || 'COM4',
-                                                                    selectedDeviceId
-                                                                )
-                                                            }
-                                                        >
-                                                            {(serverSerialPorts || []).map((sp) => (
-                                                                <MenuItem key={`rig-${sp.port}`} value={sp.port}>
-                                                                    {sp.port} (CAT :4532)
-                                                                </MenuItem>
-                                                            ))}
-                                                        </Select>
-                                                    </FormControl>
-
-                                                    <FormControl fullWidth size="small">
-                                                        <InputLabel id="sstv-aud-com-label">Audio Port</InputLabel>
-                                                        <Select
-                                                            labelId="sstv-aud-com-label"
-                                                            value={state.audioComPort || 'COM4'}
-                                                            label="Audio Port"
-                                                            onChange={(e) =>
-                                                                updateServerPorts(
-                                                                    state.rigctldComPort || 'COM3',
-                                                                    e.target.value,
-                                                                    selectedDeviceId
-                                                                )
-                                                            }
-                                                        >
-                                                            {(serverSerialPorts || []).map((sp) => (
-                                                                <MenuItem key={`aud-${sp.port}`} value={sp.port}>
-                                                                    {sp.port} (Audio)
-                                                                </MenuItem>
-                                                            ))}
-                                                        </Select>
-                                                    </FormControl>
-                                                </Stack>
-                                            </Paper>
-                                        )}
+                                                    {(serverSerialPorts || []).map((sp) => (
+                                                        <MenuItem key={`rig-${sp.port}`} value={sp.port}>
+                                                            {sp.port} (rigctld CAT → TCP :4532)
+                                                        </MenuItem>
+                                                    ))}
+                                                </Select>
+                                            </FormControl>
+                                        </Paper>
 
                                         <Stack direction="row" spacing={1}>
                                             <Button

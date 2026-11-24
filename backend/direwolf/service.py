@@ -160,13 +160,13 @@ class DirewolfService:
         self._rigctld_primary_host = os.environ.get("RIGCTLD_HOST", "host.docker.internal")
         self._rigctld_port = int(os.environ.get("RIGCTLD_PORT", "4532"))
 
-        # Server-side Icom IC-9700 Serial / Audio port mapping (plugged into Server)
-        # Default: COM3 for rigctld CAT control (:4532), COM4 / USB Audio CODEC for Server Audio
+        # Server-side Icom IC-9700 CAT Serial + USB Audio CODEC Sound Card mapping
+        # Default: COM3 for rigctld CAT control (:4532), USB Audio CODEC Sound Card for Audio
         self._rigctld_com_port = os.environ.get("ICOM_RIGCTLD_PORT_DEVICE", "COM3")
-        self._audio_com_port = os.environ.get("ICOM_AUDIO_PORT_DEVICE", "COM4")
+        self._audio_com_port = os.environ.get("ICOM_AUDIO_PORT_DEVICE", "USB Audio CODEC")
         self._server_audio_device_id = os.environ.get("ICOM_SERVER_AUDIO_ID", "server:icom-com4")
         self._server_audio_device_label = (
-            f"[SERVER • {self._audio_com_port}] Icom IC-9700 USB Audio CODEC "
+            f"[SERVER Sound Card] Icom IC-9700 {self._audio_com_port} "
             f"(rigctld: {self._rigctld_com_port} → :{self._rigctld_port})"
         )
         self._input_source_mode = "server"  # 'server' | 'client_web'

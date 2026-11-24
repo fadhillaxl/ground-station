@@ -7,7 +7,7 @@ import { ThemeProvider } from '@mui/material/styles';
 import { MemoryRouter } from 'react-router-dom';
 import { setupTheme } from '../../../theme.js';
 import SstvPage from '../sstv-page.jsx';
-import { isIcomAudioDevice } from '../useAudioProcessor.ts';
+import { isIcomAudioDevice, normalizeAndDownmixStereo } from '../useAudioProcessor.ts';
 import { SSTVDecoder, DecoderState } from '../lib/decoder.ts';
 import { getNavigation } from '../../../config/navigation.jsx';
 
@@ -38,10 +38,10 @@ describe('SstvPage (Dynamic Waterfall-style Grid Layout + smolgroot DSP engine)'
         expect(screen.getByText('Audio Source (IC-9700)')).toBeTruthy();
         expect(
             screen.getByText(
-                /\[SERVER • COM4\] Icom IC-9700 USB Audio CODEC \(Server • rigctld: COM3\)/i
+                /USB Audio CODEC — Icom IC-9700 \(Auto-Lock USB Sound Card • 48000 Hz\)/i
             )
         ).toBeTruthy();
-        expect(screen.getByText('SERVER ICOM IC-9700 USB PORTS')).toBeTruthy();
+        expect(screen.getByText('ICOM IC-9700 USB AUDIO CODEC & CAT')).toBeTruthy();
         expect(screen.getAllByText('Auto Detect (SSTV Signal)').length).toBeGreaterThan(0);
         expect(screen.getByText('Audio Analysis')).toBeTruthy();
         expect(screen.getByText('Waveform & Spectrum')).toBeTruthy();
@@ -65,11 +65,18 @@ describe('SstvPage (Dynamic Waterfall-style Grid Layout + smolgroot DSP engine)'
         expect(decoder.getStats().currentLine).toBe(0);
     });
 
-    it('detects Icom / USB Audio CODEC labels accurately', () => {
+    it('detects Icom / USB Audio CODEC labels accurately and downmixes stereo Main/Sub VFO with AGC', () => {
         expect(isIcomAudioDevice('USB Audio CODEC (08bb:2901)')).toBe(true);
         expect(isIcomAudioDevice('Burr-Brown from TI USB Audio CODEC')).toBe(true);
+        expect(isIcomAudioDevice('Microphone (USB Audio CODEC)')).toBe(true);
         expect(isIcomAudioDevice('Icom IC-9700 Audio')).toBe(true);
         expect(isIcomAudioDevice('MacBook Pro Microphone')).toBe(false);
+
+        const leftMainSilent = new Float32Array([0, 0, 0, 0]);
+        const rightSubQuiet = new Float32Array([0.02, -0.02, 0.01, -0.01]);
+        const out = normalizeAndDownmixStereo(leftMainSilent, rightSubQuiet);
+        expect(out.length).toBe(4);
+        expect(Math.max(...Array.from(out, (v) => Math.abs(v)))).toBeGreaterThanOrEqual(0.4);
     });
 
     it('includes SSTV item in the main sidebar navigation', () => {

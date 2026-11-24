@@ -322,7 +322,9 @@ export default function PacketTelemetryPage() {
     const rigPort = status?.rigctld?.port || 4532;
     const rigLatency = status?.rigctld?.latencyMs;
     const rigComPort = status?.serverAudio?.rigctldComPort || status?.rigctld?.comPort || 'COM3';
-    const audioComPort = status?.serverAudio?.audioComPort || 'COM4';
+    const rawAudioDev = status?.serverAudio?.audioComPort || 'USB Audio CODEC';
+    const audioComPort =
+        rawAudioDev === 'COM4' || rawAudioDev === 'COM3' ? 'USB Audio CODEC' : rawAudioDev;
 
     const totalPackets = status?.stats?.totalPackets ?? packets.length;
     const ch0Count = status?.stats?.channel0Packets1200 ?? packets.filter((p) => p.channel === 0).length;
@@ -397,19 +399,19 @@ export default function PacketTelemetryPage() {
                             </Tooltip>
                         </Stack>
                         <Typography variant="caption" color="text.secondary">
-                            Server Icom IC-9700 ({rigComPort} rigctld → :{rigPort} • {audioComPort} USB Audio CODEC 48000 Hz) • Ch 0: 1200 bps • Ch 1: 9600 bps
+                            Icom IC-9700 ({rigComPort} rigctld → :{rigPort} • Sound Card: {audioComPort} 48000 Hz) • Ch 0: 1200 bps • Ch 1: 9600 bps
                         </Typography>
                     </Box>
                 </Stack>
 
-                {/* Controls: Server COM Ports (COM3 / COM4), Channel Filter, ASCII/HEX Toggle, Simulate, Clear, Export */}
+                {/* Controls: Server rigctld CAT Port, USB Audio CODEC Sound Card, Channel Filter, ASCII/HEX Toggle, Simulate, Clear, Export */}
                 <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
                     <FormControl size="small" sx={{ minWidth: 125 }}>
-                        <InputLabel id="direwolf-rig-com-label">rigctld (Server)</InputLabel>
+                        <InputLabel id="direwolf-rig-com-label">rigctld CAT</InputLabel>
                         <Select
                             labelId="direwolf-rig-com-label"
                             value={rigComPort}
-                            label="rigctld (Server)"
+                            label="rigctld CAT"
                             onChange={(e) =>
                                 dispatch(
                                     updateDirewolfServerConfig({
@@ -426,12 +428,12 @@ export default function PacketTelemetryPage() {
                         </Select>
                     </FormControl>
 
-                    <FormControl size="small" sx={{ minWidth: 125 }}>
-                        <InputLabel id="direwolf-audio-com-label">Audio (Server)</InputLabel>
+                    <FormControl size="small" sx={{ minWidth: 155 }}>
+                        <InputLabel id="direwolf-audio-com-label">Sound Card (IC-9700)</InputLabel>
                         <Select
                             labelId="direwolf-audio-com-label"
                             value={audioComPort}
-                            label="Audio (Server)"
+                            label="Sound Card (IC-9700)"
                             onChange={(e) =>
                                 dispatch(
                                     updateDirewolfServerConfig({
@@ -441,10 +443,9 @@ export default function PacketTelemetryPage() {
                                 )
                             }
                         >
-                            <MenuItem value="COM4">COM4 (USB Audio)</MenuItem>
-                            <MenuItem value="COM3">COM3 (USB Audio)</MenuItem>
-                            <MenuItem value="plughw:CARD=CODEC,DEV=0">ALSA CODEC</MenuItem>
-                            <MenuItem value="/dev/ttyUSB1">/dev/ttyUSB1</MenuItem>
+                            <MenuItem value="USB Audio CODEC">USB Audio CODEC (48 kHz)</MenuItem>
+                            <MenuItem value="plughw:CARD=CODEC,DEV=0">ALSA plughw:CARD=CODEC</MenuItem>
+                            <MenuItem value="hw:CARD=CODEC,DEV=0">ALSA hw:CARD=CODEC</MenuItem>
                         </Select>
                     </FormControl>
                     <FormControl size="small" sx={{ minWidth: 165 }}>
