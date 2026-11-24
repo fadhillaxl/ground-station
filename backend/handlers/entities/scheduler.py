@@ -278,14 +278,26 @@ async def toggle_observation_enabled(
         return {"success": False, "error": "ID and enabled status required"}
 
     async with AsyncSessionLocal() as dbsession:
-        # Directly update only the enabled field
+        # Check if observation is currently running before disabling
+        was_running = False
+        if not enabled:
+            obs_res = await crud_observations.fetch_scheduled_observations(
+                dbsession, observation_id
+            )
+            if obs_res.get("success") and isinstance(obs_res.get("data"), dict):
+                was_running = obs_res["data"].get("status") == "running"
+
+        # Directly update the enabled field
         result = await crud_observations.toggle_scheduled_observation_enabled(
             dbsession, observation_id, enabled
         )
 
-        # Sync to APScheduler if successful
+        # Sync to APScheduler (and stop if it was running and just got disabled)
         if result["success"]:
-            if obs_events.observation_sync:
+            if not enabled and was_running and obs_events.observation_sync:
+                if obs_events.observation_sync.executor:
+                    await obs_events.observation_sync.executor.cancel_observation(observation_id)
+            elif obs_events.observation_sync:
                 await obs_events.observation_sync.sync_observation(observation_id)
 
             # Emit event to all clients that observations have changed
@@ -352,10 +364,12 @@ async def trigger_instant_weather_decode(
         return {"success": False, "error": "SDR ID required"}
 
     import uuid
+
     obs_id = str(uuid.uuid4())
 
     async with AsyncSessionLocal() as dbsession:
         from crud.hardware import fetch_sdr
+
         sdr_res = await fetch_sdr(dbsession, sdr_id)
         if not sdr_res["success"] or not sdr_res["data"]:
             logger.error(f"SDR not found: {sdr_id}")
@@ -363,6 +377,7 @@ async def trigger_instant_weather_decode(
         sdr_data = sdr_res["data"]
 
         import datetime
+
         now = datetime.datetime.now(datetime.timezone.utc)
         now_iso = now.isoformat().replace("+00:00", "Z")
         future_iso = (now + datetime.timedelta(hours=24)).isoformat().replace("+00:00", "Z")
@@ -380,7 +395,11 @@ async def trigger_instant_weather_decode(
             "lna_agc": bool(custom_lna_agc),
             "bias_t": bool(custom_bias),
             "antenna_port": sdr_data.get("antenna_port", "RX"),
-            "sample_rate": float(custom_sample_rate) if custom_sample_rate is not None else sdr_data.get("sample_rate", 2.048e6),
+            "sample_rate": (
+                float(custom_sample_rate)
+                if custom_sample_rate is not None
+                else sdr_data.get("sample_rate", 2.048e6)
+            ),
         }
 
         task_config = {
@@ -410,21 +429,14 @@ async def trigger_instant_weather_decode(
             "task_end": future_iso,
             "task_start_elevation": 10.0,
             "sessions": [
-                {
-                    "sdr": sdr_config,
-                    "tasks": [
-                        {
-                            "type": "weather_decoder",
-                            "config": task_config
-                        }
-                    ]
-                }
+                {"sdr": sdr_config, "tasks": [{"type": "weather_decoder", "config": task_config}]}
             ],
             "rotator": None,
-            "rig": None
+            "rig": None,
         }
 
         from crud.scheduledobservations import add_scheduled_observation
+
         db_res = await add_scheduled_observation(dbsession, observation_payload)
         if not db_res["success"]:
             logger.error(f"Failed to add temporary observation: {db_res.get('error')}")
@@ -437,8 +449,13 @@ async def trigger_instant_weather_decode(
                 await emit_scheduled_observations_changed()
                 return {"success": True, "observation_id": obs_id}
             else:
-                logger.error(f"Failed to execute temporary observation: {start_result.get('error')}")
-                return {"success": False, "error": start_result.get("error", "Failed to start execution")}
+                logger.error(
+                    f"Failed to execute temporary observation: {start_result.get('error')}"
+                )
+                return {
+                    "success": False,
+                    "error": start_result.get("error", "Failed to start execution"),
+                }
         except Exception as e:
             logger.error(f"Error starting execution: {e}")
             return {"success": False, "error": f"Failed to start execution: {e}"}
@@ -730,6 +747,7 @@ async def get_weather_logs(
         return {"success": False, "error": "decoder_id is required"}
 
     from weather.manager import get_decoder_logs
+
     logs = get_decoder_logs(decoder_id)
     return {"success": True, "data": logs}
 
@@ -748,6 +766,7 @@ async def configure_weather_fft(
         return {"success": False, "error": "decoder_id is required"}
 
     from weather.manager import active_processes
+
     proc_info = active_processes.get(decoder_id)
     if not proc_info:
         return {"success": False, "error": "No active weather decoder process found"}

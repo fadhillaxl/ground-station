@@ -500,9 +500,17 @@ class ObservationExecutor:
                 await observation_sync.remove_observation(observation_id)
                 logger.info(f"Removed scheduled jobs for observation {observation_id}")
 
-            # 3. If running, stop it
-            if status == STATUS_RUNNING:
-                await self._stop_observation_task(observation_id, observation)
+            # 3. If running, stop it (with timeout & error resilience so DB status always updates to CANCELLED)
+            if status == STATUS_RUNNING or observation_id in self._running_observations:
+                try:
+                    await asyncio.wait_for(
+                        self._stop_observation_task(observation_id, observation),
+                        timeout=6.0,
+                    )
+                except Exception as stop_err:
+                    logger.warning(
+                        f"Non-fatal cleanup warning while cancelling observation {observation_id}: {stop_err}"
+                    )
 
             # 4. Update status to CANCELLED
             await update_observation_status(self.sio, observation_id, STATUS_CANCELLED)
@@ -641,19 +649,23 @@ class ObservationExecutor:
                 elif task_type == "weather_decoder":
                     pipeline_id = task_config.get("pipeline_id", "gk2a_lrit")
                     output_dir = task_config.get("output_dir", "decoded")
-                    
+
+                    from weather.filewatcher import start_watcher_task
                     from weather.manager import start_live_decoder
                     from weather.satdumpbridge import start_bridge_task
-                    from weather.filewatcher import start_watcher_task
 
-                    freq_override = task_config.get("frequency_hz") or task_config.get("center_frequency")
+                    freq_override = task_config.get("frequency_hz") or task_config.get(
+                        "center_frequency"
+                    )
                     rate_override = task_config.get("sample_rate")
 
                     merged_sdr_config = {**sdr_config}
                     if "lna_agc" in task_config:
                         merged_sdr_config["lna_agc"] = task_config["lna_agc"]
                     if "bias" in task_config or "bias_t" in task_config:
-                        merged_sdr_config["bias_t"] = task_config.get("bias") or task_config.get("bias_t")
+                        merged_sdr_config["bias_t"] = task_config.get("bias") or task_config.get(
+                            "bias_t"
+                        )
                     if "gain" in task_config:
                         merged_sdr_config["gain"] = task_config["gain"]
 
@@ -663,7 +675,7 @@ class ObservationExecutor:
                         sdr_config=merged_sdr_config,
                         output_dir=output_dir,
                         frequency_hz=freq_override,
-                        sample_rate=rate_override
+                        sample_rate=rate_override,
                     )
 
                     if http_port:
@@ -820,9 +832,9 @@ class ObservationExecutor:
 
             if has_weather_task:
                 try:
+                    from weather.filewatcher import stop_watcher_task
                     from weather.manager import stop_live_decoder
                     from weather.satdumpbridge import stop_bridge_task
-                    from weather.filewatcher import stop_watcher_task
 
                     await stop_live_decoder(observation_id)
                     await stop_bridge_task(observation_id)

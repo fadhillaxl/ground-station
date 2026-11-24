@@ -3,8 +3,8 @@
 import asyncio
 import logging
 import socket
-from typing import Dict, Any, Optional
 from pathlib import Path
+from typing import Any, Dict, Optional
 
 from weather.pipelines import gk2a
 
@@ -49,14 +49,19 @@ def map_sdr_config_to_args(sdr_config: Dict[str, Any]) -> list[str]:
     # Detect device type
     if "rtlsdr" in sdr_type:
         if connection_type == "tcp":
-            args.extend([
-                "--source", "rtltcp",
-                "--ip_address", str(sdr_config.get("host", "127.0.0.1")),
-                "--port", str(sdr_config.get("port", 1234)),
-            ])
+            args.extend(
+                [
+                    "--source",
+                    "rtltcp",
+                    "--ip_address",
+                    str(sdr_config.get("host", "127.0.0.1")),
+                    "--port",
+                    str(sdr_config.get("port", 1234)),
+                ]
+            )
         else:
             args.extend(["--source", "rtlsdr"])
-        
+
         args.extend(["--gain", str(int(float(gain)))])
         if lna_agc:
             args.append("--lna_agc")
@@ -85,13 +90,14 @@ def map_sdr_config_to_args(sdr_config: Dict[str, Any]) -> list[str]:
 from weather.rtltcpproxy import RTLTCPProxy
 from weather.websocket import emit_weather_event
 
+
 async def start_live_decoder(
     decoder_id: str,
     pipeline_id: str,
     sdr_config: Dict[str, Any],
     output_dir: str,
     frequency_hz: Optional[float] = None,
-    sample_rate: Optional[float] = None
+    sample_rate: Optional[float] = None,
 ) -> Optional[int]:
     """
     Spawns a SatDump live subprocess for the given pipeline and SDR configuration.
@@ -120,6 +126,7 @@ async def start_live_decoder(
         try:
             from crud.hardware import fetch_sdr
             from db import AsyncSessionLocal
+
             async with AsyncSessionLocal() as session:
                 db_res = await fetch_sdr(session, sdr_id)
                 if db_res["success"] and db_res["data"]:
@@ -144,11 +151,12 @@ async def start_live_decoder(
     resolved_output = Path(output_dir)
     if not resolved_output.is_absolute():
         resolved_output = backend_dir / "data" / output_dir.lstrip("/")
-    
+
     resolved_output.mkdir(parents=True, exist_ok=True)
 
     # Ensure directory size is within limit before decoding and start background cleaner
     from weather.cleaner import cleanup_weather_folder, start_cleaner_task, stop_cleaner_task
+
     cleanup_weather_folder(resolved_output)
     await start_cleaner_task(decoder_id, resolved_output)
 
@@ -176,28 +184,21 @@ async def start_live_decoder(
         remote_port = sdr_config.get("port", 1234)
         logger.info(f"Initializing RTL-TCP Proxy for {remote_host}:{remote_port}")
         proxy = RTLTCPProxy(remote_host, remote_port)
-        
+
         # Define callback to emit FFT data over socket.io
         def fft_callback(fft_data):
             asyncio.create_task(
                 emit_weather_event(
-                    "weather_fft",
-                    {
-                        "decoder_id": decoder_id,
-                        "fft": fft_data.tolist()
-                    }
+                    "weather_fft", {"decoder_id": decoder_id, "fft": fft_data.tolist()}
                 )
             )
+
         proxy.fft_callback = fft_callback
-        
+
         try:
             proxy_port = await proxy.start()
             # Override target config for SatDump command mapping
-            sdr_config = {
-                **sdr_config,
-                "host": "127.0.0.1",
-                "port": proxy_port
-            }
+            sdr_config = {**sdr_config, "host": "127.0.0.1", "port": proxy_port}
         except Exception as proxy_err:
             logger.error(f"Failed to start RTL-TCP proxy: {proxy_err}")
             proxy = None
@@ -219,33 +220,34 @@ async def start_live_decoder(
     # Format frequency and samplerate to scientific notation e.g., 1692.14e6 and 2.048e6
     freq_str = f"{target_freq / 1e6}e6"
     rate_str = f"{target_rate / 1e6}e6"
-    cmd.extend([
-        "--frequency", freq_str,
-        "--samplerate", rate_str,
-        "--http_server", http_addr,
-        "--dc_block"
-    ])
+    cmd.extend(
+        [
+            "--frequency",
+            freq_str,
+            "--samplerate",
+            rate_str,
+            "--http_server",
+            http_addr,
+            "--dc_block",
+        ]
+    )
 
     logger.info(f"Launching SatDump command: {' '.join(cmd)}")
 
     import shlex
+
     # Wrap in script command to allocate a pseudo-terminal (PTY)
     # This forces line-buffering and enables real-time progress/SNR stdout logs in SatDump
-    run_cmd = [
-        "script",
-        "-q",
-        "-c",
-        shlex.join(cmd),
-        "/dev/null"
-    ]
+    run_cmd = ["script", "-q", "-c", shlex.join(cmd), "/dev/null"]
 
     try:
         import os
+
         process = await asyncio.create_subprocess_exec(
             *run_cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            preexec_fn=os.setsid
+            preexec_fn=os.setsid,
         )
 
         active_processes[decoder_id] = {
@@ -259,7 +261,9 @@ async def start_live_decoder(
             "proxy": proxy,
         }
 
-        logger.info(f"SatDump process started in process group with PID {process.pid} on HTTP port {http_port}")
+        logger.info(
+            f"SatDump process started in process group with PID {process.pid} on HTTP port {http_port}"
+        )
         return http_port
 
     except Exception as e:
@@ -270,89 +274,95 @@ async def start_live_decoder(
 
 
 async def stop_live_decoder(decoder_id: str) -> bool:
-    """Stops an active SatDump live decoder subprocess."""
-    proc_info = active_processes.get(decoder_id)
+    """Stops an active SatDump live decoder subprocess and its RTL-TCP proxy cleanly."""
+    proc_info = active_processes.pop(decoder_id, None)
     if not proc_info:
         logger.warning(f"No active decoder found for ID {decoder_id}")
         return False
 
-    # Stop proxy if active
+    # 1. Cancel logger tasks first
+    for task_key in ("stdout_task", "stderr_task"):
+        task = proc_info.get(task_key)
+        if task and not task.done():
+            task.cancel()
+
+    # 2. Terminate the SatDump process group FIRST so it disconnects from the local RTL-TCP proxy
+    process = proc_info.get("process")
+    if process is not None and process.pid is not None:
+        pgid = process.pid
+        logger.info(f"Stopping live decoder {decoder_id} process group (PGID {pgid})")
+        try:
+            import os
+            import signal
+
+            try:
+                os.killpg(pgid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+
+            try:
+                await asyncio.wait_for(process.wait(), timeout=2.0)
+            except asyncio.TimeoutError:
+                logger.warning(f"Process group {pgid} did not exit gracefully, killing...")
+                try:
+                    os.killpg(pgid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                except Exception as kill_err:
+                    logger.error(f"Error sending SIGKILL to process group {pgid}: {kill_err}")
+                try:
+                    await asyncio.wait_for(process.wait(), timeout=1.5)
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.error(f"Error terminating process group {pgid}: {e}")
+
+    # 3. Stop RTL-TCP proxy with a strict timeout
     if "proxy" in proc_info and proc_info["proxy"]:
         try:
-            await proc_info["proxy"].stop()
+            await asyncio.wait_for(proc_info["proxy"].stop(), timeout=2.0)
         except Exception as proxy_err:
             logger.error(f"Error stopping proxy for decoder {decoder_id}: {proxy_err}")
 
-    process = proc_info["process"]
-    pgid = process.pid
-    logger.info(f"Stopping live decoder {decoder_id} process group (PGID {pgid})")
-
-    # Terminate the entire process group politely (script + sh + satdump)
-    try:
-        import os
-        import signal
-        try:
-            os.killpg(pgid, signal.SIGTERM)
-        except ProcessLookupError:
-            pass
-
-        # Wait up to 5 seconds for termination
-        try:
-            await asyncio.wait_for(process.wait(), timeout=5.0)
-        except asyncio.TimeoutError:
-            logger.warning(f"Process group {pgid} did not exit gracefully, killing...")
-            try:
-                os.killpg(pgid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            except Exception as kill_err:
-                logger.error(f"Error sending SIGKILL to process group {pgid}: {kill_err}")
-            await process.wait()
-    except Exception as e:
-        logger.error(f"Error terminating process group {pgid}: {e}")
-
-    # Stop cleaner task
+    # 4. Stop cleaner task
     try:
         from weather.cleaner import stop_cleaner_task
-        await stop_cleaner_task(decoder_id)
+
+        await asyncio.wait_for(stop_cleaner_task(decoder_id), timeout=1.5)
     except Exception as cleaner_err:
         logger.error(f"Error stopping cleaner task for decoder {decoder_id}: {cleaner_err}")
 
-    # Cancel logger tasks
-    proc_info["stdout_task"].cancel()
-    proc_info["stderr_task"].cancel()
-
-    del active_processes[decoder_id]
     logger.info(f"Decoder {decoder_id} stopped and cleaned up.")
     return True
 
 
 import time
 
+
 async def _process_line(decoder_id: str, line_decoded: str, name: str):
     """Logs, caches, and emits a single decoded line."""
     # Log debug info from SatDump
     logger.debug(f"[SatDump-{decoder_id}-{name}] {line_decoded}")
-    
+
     # Cache logs for newly connected clients
     if decoder_id in active_processes:
         proc_logs = active_processes[decoder_id].setdefault("logs", [])
-        proc_logs.append({
-            "stream": name,
-            "message": line_decoded,
-            "timestamp": time.time()
-        })
+        proc_logs.append({"stream": name, "message": line_decoded, "timestamp": time.time()})
         if len(proc_logs) > 500:
             proc_logs.pop(0)
 
     # Emit websocket event
     from weather.websocket import emit_weather_event
-    await emit_weather_event("weather.log", {
-        "decoder_id": decoder_id,
-        "stream": name,
-        "message": line_decoded,
-        "timestamp": time.time()
-    })
+
+    await emit_weather_event(
+        "weather.log",
+        {
+            "decoder_id": decoder_id,
+            "stream": name,
+            "message": line_decoded,
+            "timestamp": time.time(),
+        },
+    )
 
 
 async def _log_output(decoder_id: str, stream: asyncio.StreamReader, name: str):
@@ -366,31 +376,31 @@ async def _log_output(decoder_id: str, stream: asyncio.StreamReader, name: str):
                 if buffer.strip():
                     await _process_line(decoder_id, buffer.strip(), name)
                 break
-            
-            buffer += chunk.decode('utf-8', errors='ignore')
-            
+
+            buffer += chunk.decode("utf-8", errors="ignore")
+
             # Split by either carriage return (\r) or line feed (\n)
             # to handle real-time CLI progress bars (\r) properly
             while True:
                 pos_lf = buffer.find("\n")
                 pos_cr = buffer.find("\r")
-                
+
                 if pos_lf == -1 and pos_cr == -1:
                     break
-                
+
                 if pos_lf != -1 and pos_cr != -1:
                     pos = min(pos_lf, pos_cr)
                 else:
                     pos = pos_lf if pos_lf != -1 else pos_cr
-                
+
                 line = buffer[:pos]
-                buffer = buffer[pos + 1:]
-                
+                buffer = buffer[pos + 1 :]
+
                 # Only process non-empty lines
                 cleaned_line = line.strip()
                 if cleaned_line:
                     await _process_line(decoder_id, cleaned_line, name)
-                    
+
     except asyncio.CancelledError:
         pass
     except Exception as e:

@@ -27,7 +27,12 @@ from common.logger import logger
 from crud.scheduledobservations import fetch_scheduled_observations
 from db import AsyncSessionLocal
 from db.models import ScheduledObservations
-from observations.constants import STATUS_MISSED, STATUS_SCHEDULED
+from observations.constants import (
+    STATUS_CANCELLED,
+    STATUS_MISSED,
+    STATUS_RUNNING,
+    STATUS_SCHEDULED,
+)
 from observations.executor import ObservationExecutor
 from observations.helpers import log_execution_event, update_observation_status
 
@@ -296,14 +301,30 @@ class ObservationSchedulerSync:
 
             logger.info(f"Found {len(observations)} observations in database")
 
-            # 3. Check for missed observations and mark them
+            # 3. Check for missed or orphaned running observations and mark them
             now = datetime.now(timezone.utc)
             missed_count = 0
             for observation in observations:
                 obs_id = observation.get("id")
                 status = observation.get("status", "").lower()
+                is_enabled = bool(observation.get("enabled", True))
 
-                # Only check scheduled observations
+                # Clean up stale running observations left in DB after container restart or after being disabled
+                if status == STATUS_RUNNING and obs_id:
+                    active_in_executor = (
+                        self.executor is not None
+                        and hasattr(self.executor, "_running_observations")
+                        and obs_id in self.executor._running_observations
+                    )
+                    if not active_in_executor or not is_enabled:
+                        logger.info(
+                            f"Cleaning up stale/disabled running observation {obs_id} ({observation.get('name')}) -> cancelled"
+                        )
+                        await update_observation_status(self.sio, obs_id, STATUS_CANCELLED)
+                        observation["status"] = STATUS_CANCELLED
+                        continue
+
+                # Check scheduled observations
                 if status == STATUS_SCHEDULED:
                     # Get task_end time
                     task_end_str = observation.get("task_end")

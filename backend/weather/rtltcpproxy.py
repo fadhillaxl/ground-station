@@ -2,10 +2,11 @@
 
 import asyncio
 import logging
-import time
 import struct
-import numpy as np
+import time
 from typing import Callable, Optional
+
+import numpy as np
 
 logger = logging.getLogger("weather-rtltcp-proxy")
 
@@ -20,8 +21,9 @@ class RTLTCPProxy:
         self.remote_reader: Optional[asyncio.StreamReader] = None
         self.remote_writer: Optional[asyncio.StreamWriter] = None
         self.clients: list[asyncio.StreamWriter] = []
+        self._forward_tasks: set[asyncio.Task] = set()
         self.running = False
-        
+
         # FFT Configurable Settings
         self.fft_size = 1024
         self.fft_fps = 15
@@ -30,17 +32,15 @@ class RTLTCPProxy:
     async def start(self) -> int:
         """Starts the local TCP server proxy and returns the local port it bound to."""
         self.running = True
-        
+
         # Bind to a dynamically allocated free port on localhost
-        self.server = await asyncio.start_server(
-            self._handle_client, self.local_host, 0
-        )
-        
+        self.server = await asyncio.start_server(self._handle_client, self.local_host, 0)
+
         # Extract the dynamically allocated port
         for s in self.server.sockets:
             self.local_port = s.getsockname()[1]
             break
-            
+
         logger.info(
             f"RTL-TCP Proxy listening on {self.local_host}:{self.local_port}, "
             f"forwarding to {self.remote_host}:{self.remote_port}"
@@ -48,31 +48,41 @@ class RTLTCPProxy:
         return self.local_port
 
     async def stop(self):
-        """Stops the proxy and cleanly closes all client/remote connections."""
+        """Stops the proxy and cleanly closes all client/remote connections without deadlocking."""
         self.running = False
-        
-        if self.server:
-            self.server.close()
-            await self.server.wait_closed()
-            self.server = None
-            
-        # Close all connected clients
-        for client in self.clients:
-            try:
-                client.close()
-                await client.wait_closed()
-            except Exception:
-                pass
-        self.clients.clear()
-        
+
+        # 1. Cancel active forwarder tasks first so blocked reader.read() calls abort immediately
+        for task in list(self._forward_tasks):
+            if not task.done():
+                task.cancel()
+        self._forward_tasks.clear()
+
+        # 2. Close remote and client writers before waiting on server.wait_closed()
         if self.remote_writer:
             try:
                 self.remote_writer.close()
-                await self.remote_writer.wait_closed()
+                await asyncio.wait_for(self.remote_writer.wait_closed(), timeout=0.5)
             except Exception:
                 pass
             self.remote_writer = None
             self.remote_reader = None
+
+        for client in list(self.clients):
+            try:
+                client.close()
+                await asyncio.wait_for(client.wait_closed(), timeout=0.5)
+            except Exception:
+                pass
+        self.clients.clear()
+
+        # 3. Close listening server with a strict timeout
+        if self.server:
+            try:
+                self.server.close()
+                await asyncio.wait_for(self.server.wait_closed(), timeout=1.0)
+            except Exception:
+                pass
+            self.server = None
 
         logger.info("RTL-TCP Proxy stopped.")
 
@@ -107,17 +117,21 @@ class RTLTCPProxy:
             except Exception as e:
                 logger.error(f"RTL-TCP Proxy: Error setting gain: {e}")
 
-    async def _handle_client(self, client_reader: asyncio.StreamReader, client_writer: asyncio.StreamWriter):
+    async def _handle_client(
+        self, client_reader: asyncio.StreamReader, client_writer: asyncio.StreamWriter
+    ):
         """Handles a new incoming client (SatDump) connection."""
         logger.info("RTL-TCP Proxy: SatDump client connected to local proxy port.")
         self.clients.append(client_writer)
-        
+
         try:
             # Establish the single upstream connection to the remote RTL-TCP server
             self.remote_reader, self.remote_writer = await asyncio.open_connection(
                 self.remote_host, self.remote_port
             )
-            logger.info(f"RTL-TCP Proxy: Connected to remote RTL-TCP at {self.remote_host}:{self.remote_port}")
+            logger.info(
+                f"RTL-TCP Proxy: Connected to remote RTL-TCP at {self.remote_host}:{self.remote_port}"
+            )
         except Exception as e:
             logger.error(f"RTL-TCP Proxy: Failed to connect to remote RTL-TCP: {e}")
             client_writer.close()
@@ -130,30 +144,46 @@ class RTLTCPProxy:
             return
 
         # Start downstream and upstream forwarders
-        client_to_remote = asyncio.create_task(self._forward_client_to_remote(client_reader, self.remote_writer))
-        remote_to_client = asyncio.create_task(self._forward_remote_to_client(self.remote_reader, client_writer))
+        client_to_remote = asyncio.create_task(
+            self._forward_client_to_remote(client_reader, self.remote_writer)
+        )
+        remote_to_client = asyncio.create_task(
+            self._forward_remote_to_client(self.remote_reader, client_writer)
+        )
+        self._forward_tasks.add(client_to_remote)
+        self._forward_tasks.add(remote_to_client)
+        client_to_remote.add_done_callback(self._forward_tasks.discard)
+        remote_to_client.add_done_callback(self._forward_tasks.discard)
 
         try:
-            await asyncio.gather(client_to_remote, remote_to_client)
+            done, pending = await asyncio.wait(
+                [client_to_remote, remote_to_client],
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            del done
+            for p_task in pending:
+                p_task.cancel()
         except Exception as e:
             logger.debug(f"RTL-TCP Proxy: Bridged connections closed: {e}")
         finally:
             client_writer.close()
             try:
-                await client_writer.wait_closed()
+                await asyncio.wait_for(client_writer.wait_closed(), timeout=0.5)
             except Exception:
                 pass
             if client_writer in self.clients:
                 self.clients.remove(client_writer)
-            
+
             if self.remote_writer:
                 self.remote_writer.close()
                 try:
-                    await self.remote_writer.wait_closed()
+                    await asyncio.wait_for(self.remote_writer.wait_closed(), timeout=0.5)
                 except Exception:
                     pass
 
-    async def _forward_client_to_remote(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+    async def _forward_client_to_remote(
+        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    ):
         """Forwards control commands from SatDump to the remote RTL-TCP server."""
         try:
             while self.running:
@@ -167,57 +197,63 @@ class RTLTCPProxy:
         except Exception as e:
             logger.debug(f"RTL-TCP Proxy command forwarder error: {e}")
 
-    async def _forward_remote_to_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+    async def _forward_remote_to_client(
+        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    ):
         """Forwards raw IQ samples from remote RTL-TCP to SatDump and processes subset for FFT."""
         try:
             # Read standard 12-byte header first and forward
             header = await reader.readexactly(12)
             writer.write(header)
             await writer.drain()
-            
+
             last_fft_time = 0.0
-            
+
             while self.running:
                 # Read chunks of IQ data from the network
                 data = await reader.read(32768)
                 if not data:
                     break
-                
+
                 # Forward to client (SatDump) immediately
                 writer.write(data)
                 await writer.drain()
-                
+
                 # Process FFT if callback is set and enough time has elapsed
                 now = time.time()
                 min_fft_interval = 1.0 / self.fft_fps
                 required_bytes = self.fft_size * 2
-                
-                if self.fft_callback and (now - last_fft_time >= min_fft_interval) and len(data) >= required_bytes:
+
+                if (
+                    self.fft_callback
+                    and (now - last_fft_time >= min_fft_interval)
+                    and len(data) >= required_bytes
+                ):
                     last_fft_time = now
                     # Extract a single chunk of length `required_bytes`
                     chunk = data[:required_bytes]
                     raw_samples = np.frombuffer(chunk, dtype=np.uint8)
-                    
+
                     if len(raw_samples) == required_bytes:
                         # Convert offset binary IQ samples [0, 255] to complex floats
                         normalized = (raw_samples.astype(np.float32) - 127.5) / 127.5
                         iq_samples = normalized[0::2] + 1j * normalized[1::2]
-                        
+
                         # Apply Hanning window
                         window = np.hanning(self.fft_size)
                         windowed = iq_samples * window
-                        
+
                         # Compute FFT & shift DC center
                         fft_res = np.fft.fft(windowed)
                         fft_res = np.fft.fftshift(fft_res)
-                        
+
                         # Normalize power levels in dB
-                        normalization = (self.fft_size ** 2) * (np.sum(window ** 2) / self.fft_size)
+                        normalization = (self.fft_size**2) * (np.sum(window**2) / self.fft_size)
                         power_db = 10 * np.log10((np.abs(fft_res) ** 2) / normalization + 1e-10)
-                        
+
                         # Clip values for rendering sanity
                         power_db = np.clip(power_db, -100.0, 20.0)
-                        
+
                         # Execute callback
                         try:
                             self.fft_callback(power_db)
